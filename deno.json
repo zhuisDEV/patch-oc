@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "check": "deno check patch_oc.ts patch_openclaw_context_engine_inspect.ts patch_openclaw_acp_routed_fallback.ts lib/patch_cli.ts lib/patch_utils.ts patches/context_engine_capability.ts patches/acp_routed_fallback.ts tests/context_engine_capability_test.ts tests/acp_routed_fallback_test.ts",
+    "test": "deno test tests",
+    "verify": "deno fmt --check && deno lint && deno task check && deno task test"
+  }
+}
