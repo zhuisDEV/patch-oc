@@ -4,7 +4,7 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.0` ships two independent patches and lets you check
+available yet. Release `v1.0.1` ships two independent patches and lets you check
 or apply part `1`, part `2`, or both.
 
 ## Included patches
@@ -65,6 +65,58 @@ Then apply only what you need:
 ./apply.sh --part 2
 ./apply.sh --part all
 ```
+
+## Agent-friendly flow (single approval)
+
+If your agent runs in exec-approval mode, avoid cloning inside each run. Clone
+once, then keep a stable local checkout and run one apply command per task.
+
+One-time setup:
+
+```bash
+mkdir -p ~/.openclaw/lws/vendor
+git clone https://github.com/zhuisDEV/patch-oc.git ~/.openclaw/lws/vendor/patch-oc
+```
+
+Per patch run:
+
+```bash
+cd ~/.openclaw/lws/vendor/patch-oc
+./check.sh --part all
+./apply.sh --part all
+```
+
+This usually reduces approval friction to a single exec approval for the apply
+step instead of multiple approvals for `mkdir` + `git clone` + apply commands.
+
+### Suggested instruction for agents
+
+Use this in your agent prompt/instructions:
+
+```text
+Use existing local checkout at ~/.openclaw/lws/vendor/patch-oc.
+Do not clone patch-oc in normal runs.
+Run:
+  cd ~/.openclaw/lws/vendor/patch-oc
+  ./check.sh --part <1|2|all>
+  ./apply.sh --part <1|2|all>
+```
+
+### Optional cleanup after successful apply
+
+If you only needed this repo for a one-time patch run, you can remove the local
+checkout after verification:
+
+```bash
+rm -rf ~/.openclaw/lws/vendor/patch-oc
+```
+
+Important:
+
+- Removing the local `patch-oc` folder does not revert already-applied runtime
+  patch changes under your OpenClaw `dist/` directory.
+- After a future OpenClaw update, clone `patch-oc` again and re-run `check.sh`
+  and `apply.sh` if needed.
 
 ## CLI usage
 
