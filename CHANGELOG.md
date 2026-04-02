@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.4 - 2026-04-02
+
+- Fixed part `2` so non-tool ACP block/final text is counted as visible on
+  direct Discord turns too, which suppresses the duplicate final replay.
+- Simplified the part `2` patch logic to patch the ACP visibility function
+  directly instead of relying on routed call-site markers.
+- Updated tests and docs to match the corrected generalized behavior.
+
 ## v1.0.3 - 2026-04-02
 
 - Fixed part `2` bundle targeting so it matches both:

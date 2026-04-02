@@ -4,15 +4,15 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.3` ships two independent patches and lets you check
+available yet. Release `v1.0.4` ships two independent patches and lets you check
 or apply part `1`, part `2`, or both.
 
 ## Included patches
 
-| Part | Patch                                    | Symptom                                                                                                             | Scope                                                          |
-| ---- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| `1`  | context-engine capability classification | a `kind: "context-engine"` plugin can be reported as `hook-only` in `openclaw status` or `openclaw plugins inspect` | generalized to any context-engine plugin                       |
-| `2`  | ACP routed fallback replay               | routed ACP turns can send block text and then replay the same accumulated text again as a final message             | generalized at the routed ACP delivery layer, not Discord-only |
+| Part | Patch                                    | Symptom                                                                                                             | Scope                                                               |
+| ---- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `1`  | context-engine capability classification | a `kind: "context-engine"` plugin can be reported as `hook-only` in `openclaw status` or `openclaw plugins inspect` | generalized to any context-engine plugin                            |
+| `2`  | ACP routed fallback replay               | ACP turns can send block text and then replay the same accumulated text again as a final message                    | generalized across direct and routed ACP delivery, not Discord-only |
 
 ## When to use part 1
 
@@ -33,22 +33,14 @@ original observed case, but the fix is intentionally generalized to all
 Part `2` is relevant if an ACP session sends a normal reply first and then
 replays the same full text again at end of turn. The symptom is most obvious in
 Discord ACP Codex sessions, especially on longer replies, but the patch is
-applied at the routed ACP delivery layer so it is not restricted to Discord.
+applied at the ACP delivery layer so it is not restricted to Discord.
 
 The runtime-level diagnosis is:
 
-- routed ACP `block` text was delivered
-- `shouldTreatDeliveredTextAsVisible(...)` did not count that routed block as
+- ACP `block` text was delivered
+- `shouldTreatDeliveredTextAsVisible(...)` did not count non-tool block text as
   visible text
 - end-of-turn fallback replayed the accumulated text as a `final`
-
-Patch behavior in this repo:
-
-- preferred path: patch routed visibility classification plus routed call-site
-  flags
-- compatibility path: if runtime call-site shape has drifted, patch the final
-  fallback guard (`params.delivery.getRoutedCounts().block === 0`) so routed
-  block deliveries still suppress replay
 
 ## Requirements
 
@@ -207,11 +199,9 @@ rg -n "shouldTreatDeliveredTextAsVisible|routed: true|routed: false|params\.deli
 
 Expected after patch:
 
-- `if (params.routed && params.kind === "block") return true;`
-- routed ACP call site includes `routed: true`
-- direct ACP call site includes `routed: false`
-- or, on runtime-shape drift, final fallback includes
-  `params.delivery.getRoutedCounts().block === 0`
+- `if (params.kind === "tool") return false;`
+- non-tool ACP block text counts as visible
+- direct ACP block text on Discord no longer replays as a final fallback
 
 Then reproduce one routed ACP session. If the bug matched this fix, the extra
 end-of-turn replay should stop.
@@ -243,7 +233,7 @@ deno task test
 
 Suggested GitHub description:
 
-`Hot patches for installed OpenClaw runtimes: context-engine capability classification and routed ACP duplicate final replay fixes.`
+`Hot patches for installed OpenClaw runtimes: context-engine capability classification and ACP duplicate final replay fixes.`
 
 Suggested topics:
 
