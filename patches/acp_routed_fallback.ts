@@ -2,6 +2,8 @@ import type { PatchDecision, PatchDefinition } from "../lib/patch_utils.ts";
 
 const TARGET_REGION_MARKER =
   "function shouldTreatDeliveredTextAsVisible(params) {";
+const FINAL_FALLBACK_GUARD_MARKER =
+  "params.delivery.getRoutedCounts().block === 0";
 
 const DESIRED_FUNC =
   `function shouldTreatDeliveredTextAsVisible(params) {\n\tif (!params.text?.trim()) return false;\n\tif (params.kind === "final") return true;\n\tif (params.routed && params.kind === "block") return true;\n\treturn normalizeDeliveryChannel(params.channel) === "telegram";\n}`;
@@ -29,7 +31,10 @@ function injectRoutedFlag(
 }
 
 export function patchAcpRoutedFallbackContent(content: string): PatchDecision {
-  if (!content.includes(TARGET_REGION_MARKER)) {
+  if (
+    !content.includes(TARGET_REGION_MARKER) &&
+    !content.includes("async function finalizeAcpTurnOutput(params)")
+  ) {
     return {
       status: "skipped",
       detail: "ACP delivery visibility function not found",
@@ -41,48 +46,74 @@ export function patchAcpRoutedFallbackContent(content: string): PatchDecision {
   );
   const hasRoutedTrue = content.includes("routed: true");
   const hasRoutedFalse = content.includes("routed: false");
+  const hasFallbackGuard = content.includes(FINAL_FALLBACK_GUARD_MARKER);
 
-  if (hasDesiredFunction && hasRoutedTrue && hasRoutedFalse) {
+  if (
+    hasFallbackGuard ||
+    (hasDesiredFunction && hasRoutedTrue && hasRoutedFalse)
+  ) {
     return {
       status: "already",
-      detail: "routed visibility + call-site flags already present",
+      detail:
+        "effective routed replay suppression already present (call-site and/or fallback guard)",
       nextContent: content,
     };
   }
 
-  const funcRegex =
-    /function shouldTreatDeliveredTextAsVisible\(params\) \{[\s\S]*?\n\}(?=\nfunction createAcpDispatchDeliveryCoordinator\(params\) \{)/;
-  if (!funcRegex.test(content)) {
+  let next = content;
+  const edits: string[] = [];
+
+  if (!hasDesiredFunction) {
+    const funcRegex =
+      /function shouldTreatDeliveredTextAsVisible\(params\)\s*\{[\s\S]*?\n\}/;
+    if (funcRegex.test(next)) {
+      next = next.replace(funcRegex, DESIRED_FUNC);
+      edits.push("visibility function");
+    }
+  }
+
+  if (!next.includes("routed: true")) {
+    const result = injectRoutedFlag(next, "routedChannel", "true");
+    if (result.changed) {
+      next = result.text;
+      edits.push("routed true call-site");
+    }
+  }
+
+  if (!next.includes("routed: false")) {
+    const result = injectRoutedFlag(next, "directChannel", "false");
+    if (result.changed) {
+      next = result.text;
+      edits.push("routed false call-site");
+    }
+  }
+
+  if (!next.includes(FINAL_FALLBACK_GUARD_MARKER)) {
+    const fallbackRegex =
+      /if \(ttsMode !== "all" && hasAccumulatedBlockText &&/;
+    if (fallbackRegex.test(next)) {
+      next = next.replace(
+        fallbackRegex,
+        `if (ttsMode !== "all" && hasAccumulatedBlockText && ${FINAL_FALLBACK_GUARD_MARKER} &&`,
+      );
+      edits.push("final fallback guard");
+    }
+  }
+
+  const nowHasDesiredFunction = next.includes(
+    'if (params.routed && params.kind === "block") return true;',
+  );
+  const nowHasRoutedTrue = next.includes("routed: true");
+  const nowHasRoutedFalse = next.includes("routed: false");
+  const nowHasFallbackGuard = next.includes(FINAL_FALLBACK_GUARD_MARKER);
+  const effectiveSuppression = nowHasFallbackGuard ||
+    (nowHasDesiredFunction && nowHasRoutedTrue && nowHasRoutedFalse);
+
+  if (!effectiveSuppression) {
     return {
       status: "error",
       detail:
-        "unable to locate shouldTreatDeliveredTextAsVisible function block",
-    };
-  }
-
-  let next = content.replace(funcRegex, DESIRED_FUNC);
-
-  if (
-    !next.includes('if (params.routed && params.kind === "block") return true;')
-  ) {
-    return {
-      status: "error",
-      detail: "function patch marker missing after replace",
-    };
-  }
-
-  next = injectRoutedFlag(next, "routedChannel", "true").text;
-  next = injectRoutedFlag(next, "directChannel", "false").text;
-
-  const missingMarkers = [
-    !next.includes("routed: true") ? "routed: true call-site" : "",
-    !next.includes("routed: false") ? "routed: false call-site" : "",
-  ].filter(Boolean);
-
-  if (missingMarkers.length > 0) {
-    return {
-      status: "error",
-      detail: `missing patch markers: ${missingMarkers.join(", ")}`,
+        "unable to apply effective routed replay suppression markers; runtime shape may have changed",
     };
   }
 
@@ -96,7 +127,9 @@ export function patchAcpRoutedFallbackContent(content: string): PatchDecision {
 
   return {
     status: "patched",
-    detail: "patched routed block visibility and call-site routing flags",
+    detail: edits.length > 0
+      ? `patched ${edits.join(", ")}`
+      : "patched effective routed replay suppression",
     nextContent: next,
   };
 }
@@ -107,7 +140,7 @@ export const acpRoutedFallbackPatch: PatchDefinition = {
   title: "ACP routed fallback replay",
   summary:
     "Fixes routed ACP turns replaying accumulated block text again as a final reply.",
-  filePattern: /^dispatch-acp\.runtime-.*\.js$/,
+  filePattern: /^dispatch-acp\.runtime(?:-.*)?\.js$/,
   backupSuffix: ".bak-acp-routed-visible-block",
   patchFileContent: patchAcpRoutedFallbackContent,
 };

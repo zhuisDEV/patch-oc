@@ -4,7 +4,7 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.1` ships two independent patches and lets you check
+available yet. Release `v1.0.3` ships two independent patches and lets you check
 or apply part `1`, part `2`, or both.
 
 ## Included patches
@@ -41,6 +41,14 @@ The runtime-level diagnosis is:
 - `shouldTreatDeliveredTextAsVisible(...)` did not count that routed block as
   visible text
 - end-of-turn fallback replayed the accumulated text as a `final`
+
+Patch behavior in this repo:
+
+- preferred path: patch routed visibility classification plus routed call-site
+  flags
+- compatibility path: if runtime call-site shape has drifted, patch the final
+  fallback guard (`params.delivery.getRoutedCounts().block === 0`) so routed
+  block deliveries still suppress replay
 
 ## Requirements
 
@@ -165,13 +173,14 @@ By default, `patch-oc` tries to locate the OpenClaw install automatically:
 
 - `OPENCLAW_ROOT`
 - resolved `openclaw` binary location
+- global package-manager roots from `npm`, `pnpm`, and `yarn`
 - `/opt/homebrew/lib/node_modules/openclaw`
 - `/usr/local/lib/node_modules/openclaw`
 
 You can override it explicitly:
 
 ```bash
-./apply.sh --part all --openclaw-root /opt/homebrew/lib/node_modules/openclaw
+./apply.sh --part all --openclaw-root /path/to/openclaw
 ```
 
 ## Verification
@@ -192,8 +201,8 @@ Expected after patch:
 ### Verify part 2
 
 ```bash
-rg -n "shouldTreatDeliveredTextAsVisible|routed: true|routed: false" \
-  /opt/homebrew/lib/node_modules/openclaw/dist/dispatch-acp.runtime-*.js
+rg -n "shouldTreatDeliveredTextAsVisible|routed: true|routed: false|params\.delivery\.getRoutedCounts\(\)\.block === 0" \
+  "${OPENCLAW_ROOT:-/path/to/openclaw}"/dist/dispatch-acp.runtime*.js
 ```
 
 Expected after patch:
@@ -201,6 +210,8 @@ Expected after patch:
 - `if (params.routed && params.kind === "block") return true;`
 - routed ACP call site includes `routed: true`
 - direct ACP call site includes `routed: false`
+- or, on runtime-shape drift, final fallback includes
+  `params.delivery.getRoutedCounts().block === 0`
 
 Then reproduce one routed ACP session. If the bug matched this fix, the extra
 end-of-turn replay should stop.

@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.0.3 - 2026-04-02
+
+- Fixed part `2` bundle targeting so it matches both:
+  - `dispatch-acp.runtime-<hash>.js`
+  - `dispatch-acp.runtime.js`
+- Broadened OpenClaw root detection with package-manager roots from `npm`,
+  `pnpm`, and `yarn`, reducing dependency on host-specific default paths.
+- Updated verification docs to use generic `OPENCLAW_ROOT`/`--openclaw-root`
+  patterns instead of Homebrew-only paths.
+
+## v1.0.2 - 2026-04-02
+
+- Improved part `2` portability across runtime shape drift:
+  - keeps the existing routed visibility + call-site patch path
+  - adds a compatibility fallback that patches the end-of-turn final replay
+    condition with `params.delivery.getRoutedCounts().block === 0`
+- Added tests for compatibility-path patching and "already patched" detection
+  using the fallback guard marker.
+
 ## v1.0.1 - 2026-04-01
 
 - Added an agent-operations guide for single-approval patch flow using a stable

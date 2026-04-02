@@ -30,15 +30,28 @@ function decode(output: Uint8Array): string {
   return new TextDecoder().decode(output).trim();
 }
 
-async function resolveRootFromOpenclawBinary(): Promise<string | null> {
-  const which = await new Deno.Command("which", {
-    args: ["openclaw"],
-    stdout: "piped",
-    stderr: "null",
-  }).output();
-  if (!which.success) return null;
+async function runTextCommand(
+  command: string,
+  args: string[],
+): Promise<string | null> {
+  try {
+    const result = await new Deno.Command(command, {
+      args,
+      stdout: "piped",
+      stderr: "null",
+    }).output();
+    if (!result.success) return null;
+    const output = decode(result.stdout).split(/\r?\n/).find((line) =>
+      line.trim().length > 0
+    );
+    return output?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
 
-  const binPath = decode(which.stdout).split(/\r?\n/).at(-1)?.trim();
+async function resolveRootFromOpenclawBinary(): Promise<string | null> {
+  const binPath = await runTextCommand("which", ["openclaw"]);
   if (!binPath) return null;
 
   let realBin = binPath;
@@ -69,12 +82,30 @@ async function resolveRootFromOpenclawBinary(): Promise<string | null> {
   return null;
 }
 
+async function resolveRootsFromPackageManagers(): Promise<string[]> {
+  const candidates = new Set<string>();
+
+  const npmRoot = await runTextCommand("npm", ["root", "-g"]);
+  if (npmRoot) candidates.add(path.join(npmRoot, "openclaw"));
+
+  const pnpmRoot = await runTextCommand("pnpm", ["root", "-g"]);
+  if (pnpmRoot) candidates.add(path.join(pnpmRoot, "openclaw"));
+
+  const yarnGlobalDir = await runTextCommand("yarn", ["global", "dir"]);
+  if (yarnGlobalDir) {
+    candidates.add(path.join(yarnGlobalDir, "node_modules", "openclaw"));
+  }
+
+  return [...candidates];
+}
+
 export async function resolveOpenclawRoot(explicit?: string): Promise<string> {
   const envRoot = Deno.env.get("OPENCLAW_ROOT")?.trim();
   const rawCandidates = [
     explicit,
     envRoot,
     await resolveRootFromOpenclawBinary(),
+    ...(await resolveRootsFromPackageManagers()),
     "/opt/homebrew/lib/node_modules/openclaw",
     "/usr/local/lib/node_modules/openclaw",
   ].filter((value): value is string =>
