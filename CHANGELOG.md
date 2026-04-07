@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.5 - 2026-04-07
+
+- Updated part `2` file targeting so it also matches the current delegated ACP
+  runtime bundle shape (`dispatch-acp-*.js`) used by newer OpenClaw builds.
+- Added regression coverage for the new delegated ACP bundle name to prevent
+  future selector drift.
+
 ## v1.0.4 - 2026-04-02
 
 - Fixed part `2` so non-tool ACP block/final text is counted as visible on

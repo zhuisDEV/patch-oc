@@ -36,4 +36,4 @@ Hot patches for installed OpenClaw runtimes.
 
 ## Release
 
-`v1.0.4`
+`v1.0.5`

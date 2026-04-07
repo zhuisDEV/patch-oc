@@ -4,7 +4,7 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.4` ships two independent patches and lets you check
+available yet. Release `v1.0.5` ships two independent patches and lets you check
 or apply part `1`, part `2`, or both.
 
 ## Included patches
@@ -194,11 +194,13 @@ Expected after patch:
 
 ```bash
 rg -n "shouldTreatDeliveredTextAsVisible|routed: true|routed: false|params\.delivery\.getRoutedCounts\(\)\.block === 0" \
-  "${OPENCLAW_ROOT:-/path/to/openclaw}"/dist/dispatch-acp.runtime*.js
+  "${OPENCLAW_ROOT:-/path/to/openclaw}"/dist/dispatch-acp*.js
 ```
 
 Expected after patch:
 
+- current OpenClaw builds may keep the ACP logic in `dispatch-acp-Da_OnWGW.js`
+  instead of only the old `dispatch-acp.runtime*.js` wrappers
 - `if (params.kind === "tool") return false;`
 - non-tool ACP block text counts as visible
 - direct ACP block text on Discord no longer replays as a final fallback
@@ -211,7 +213,7 @@ end-of-turn replay should stop.
 On apply, each patched file gets a sibling backup:
 
 - part `1`: `status-*.js.bak-context-engine-capability`
-- part `2`: `dispatch-acp.runtime-*.js.bak-acp-routed-visible-block`
+- part `2`: `dispatch-acp*.js.bak-acp-routed-visible-block`
 
 This repo does not patch OpenClaw source code. It patches the installed build
 artifacts under `dist/`, so you will usually need to re-apply after OpenClaw

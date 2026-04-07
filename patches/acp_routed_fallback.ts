@@ -64,7 +64,7 @@ export const acpRoutedFallbackPatch: PatchDefinition = {
   title: "ACP routed fallback replay",
   summary:
     "Fixes ACP turns replaying accumulated block text again as a final reply.",
-  filePattern: /^dispatch-acp\.runtime(?:-.*)?\.js$/,
+  filePattern: /^dispatch-acp(?:\.runtime(?:-.*)?|-[A-Za-z0-9_]+)\.js$/,
   backupSuffix: ".bak-acp-routed-visible-block",
   patchFileContent: patchAcpRoutedFallbackContent,
 };
