@@ -4,15 +4,16 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.5` ships two independent patches and lets you check
-or apply part `1`, part `2`, or both.
+available yet. Release `v1.0.6` ships three independent patches and lets you
+check or apply part `1`, part `2`, part `3`, or all.
 
 ## Included patches
 
-| Part | Patch                                    | Symptom                                                                                                             | Scope                                                               |
-| ---- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `1`  | context-engine capability classification | a `kind: "context-engine"` plugin can be reported as `hook-only` in `openclaw status` or `openclaw plugins inspect` | generalized to any context-engine plugin                            |
-| `2`  | ACP routed fallback replay               | ACP turns can send block text and then replay the same accumulated text again as a final message                    | generalized across direct and routed ACP delivery, not Discord-only |
+| Part | Patch                                       | Symptom                                                                                                             | Scope                                                               |
+| ---- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `1`  | context-engine capability classification    | a `kind: "context-engine"` plugin can be reported as `hook-only` in `openclaw status` or `openclaw plugins inspect` | generalized to any context-engine plugin                            |
+| `2`  | ACP routed fallback replay                  | ACP turns can send block text and then replay the same accumulated text again as a final message                    | generalized across direct and routed ACP delivery, not Discord-only |
+| `3`  | Discord child primary binding normalization | thread-bound ACP spawn fails with `thread_binding_invalid` when conversation id is `channel:<id>`                   | Discord child-placement primary binding path                        |
 
 ## When to use part 1
 
@@ -42,6 +43,22 @@ The runtime-level diagnosis is:
   visible text
 - end-of-turn fallback replayed the accumulated text as a `final`
 
+## When to use part 3
+
+Part `3` is relevant if a Discord thread-bound ACP spawn fails with:
+
+- `thread_binding_invalid`
+- `Session binding adapter failed to bind target conversation`
+
+and the failed route uses a `conversationId` in `channel:<id>` format.
+
+The runtime-level diagnosis is:
+
+- Discord top-level placement is `child`
+- child route resolves parent channel with `threadId: conversationId`
+- `conversationId` may be `channel:<id>` (normalized identity), not a raw id
+- primary child route fails channel/thread bind target resolution
+
 ## Requirements
 
 - Deno installed
@@ -63,6 +80,7 @@ Then apply only what you need:
 ```bash
 ./apply.sh --part 1
 ./apply.sh --part 2
+./apply.sh --part 3
 ./apply.sh --part all
 ```
 
@@ -98,8 +116,8 @@ Use existing local checkout at ~/.openclaw/lws/vendor/patch-oc.
 Do not clone patch-oc in normal runs.
 Run:
   cd ~/.openclaw/lws/vendor/patch-oc
-  ./check.sh --part <1|2|all>
-  ./apply.sh --part <1|2|all>
+  ./check.sh --part <1|2|3|all>
+  ./apply.sh --part <1|2|3|all>
 ```
 
 ### Optional cleanup after successful apply
@@ -126,15 +144,18 @@ The main entrypoint is:
 deno run -A ./patch_oc.ts --check --part all
 deno run -A ./patch_oc.ts --apply --part 1
 deno run -A ./patch_oc.ts --apply --part 2
+deno run -A ./patch_oc.ts --apply --part 3
 ```
 
 Supported selectors:
 
 - `--part 1`
 - `--part 2`
+- `--part 3`
 - `--part all`
 - `--part context-engine-capability`
 - `--part acp-routed-fallback`
+- `--part discord-child-primary-binding`
 
 List supported parts:
 
@@ -147,6 +168,7 @@ The convenience wrappers forward arguments to the main CLI:
 ```bash
 ./check.sh --part 1
 ./apply.sh --part 2
+./apply.sh --part 3
 ```
 
 The part-specific scripts are still available for direct use:
@@ -157,6 +179,9 @@ deno run -A ./patch_openclaw_context_engine_inspect.ts --apply
 
 deno run -A ./patch_openclaw_acp_routed_fallback.ts --check
 deno run -A ./patch_openclaw_acp_routed_fallback.ts --apply
+
+deno run -A ./patch_openclaw_discord_child_primary_binding.ts --check
+deno run -A ./patch_openclaw_discord_child_primary_binding.ts --apply
 ```
 
 ## OpenClaw root detection
@@ -208,12 +233,27 @@ Expected after patch:
 Then reproduce one routed ACP session. If the bug matched this fix, the extra
 end-of-turn replay should stop.
 
+### Verify part 3
+
+```bash
+rg -n "threadId: \/\^channel:\/i\.test\(conversationId\) \? conversationId\.slice\(8\) : conversationId" \
+  "${OPENCLAW_ROOT:-/path/to/openclaw}"/dist/thread-bindings.manager*.js
+```
+
+Expected after patch:
+
+- child-placement lookup strips `channel:` before channel/thread resolution
+- primary child placement no longer fails from `channel:<id>` mismatch
+- thread-bound spawn does not need to rely on current-placement fallback for
+  this case
+
 ## Safety and backups
 
 On apply, each patched file gets a sibling backup:
 
 - part `1`: `status-*.js.bak-context-engine-capability`
 - part `2`: `dispatch-acp*.js.bak-acp-routed-visible-block`
+- part `3`: `thread-bindings.manager*.js.bak-discord-child-primary-binding`
 
 This repo does not patch OpenClaw source code. It patches the installed build
 artifacts under `dist/`, so you will usually need to re-apply after OpenClaw
@@ -235,7 +275,7 @@ deno task test
 
 Suggested GitHub description:
 
-`Hot patches for installed OpenClaw runtimes: context-engine capability classification and ACP duplicate final replay fixes.`
+`Hot patches for installed OpenClaw runtimes: context-engine capability classification, ACP duplicate final replay fix, and Discord child binding normalization.`
 
 Suggested topics:
 

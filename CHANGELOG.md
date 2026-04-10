@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.6 - 2026-04-10
+
+- Added part `3` (`discord-child-primary-binding`) to patch Discord
+  child-placement primary binding normalization so `channel:<id>` conversation
+  IDs are converted to raw IDs before parent channel resolution.
+- Added a dedicated entrypoint:
+  - `patch_openclaw_discord_child_primary_binding.ts`
+- Added regression coverage for part `3` patch behavior and file targeting.
+- Updated docs and CLI examples for three-part patch selection (`1`, `2`, `3`,
+  `all`).
+
 ## v1.0.5 - 2026-04-07
 
 - Updated part `2` file targeting so it also matches the current delegated ACP
