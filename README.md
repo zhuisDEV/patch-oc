@@ -4,7 +4,7 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.6` ships three independent patches and lets you
+available yet. Release `v1.0.7` ships three independent patches and lets you
 check or apply part `1`, part `2`, part `3`, or all.
 
 ## Included patches
@@ -28,6 +28,13 @@ Part `1` is relevant if your active context-engine plugin is in use, but status
 or inspect output still treats it like a hook-only plugin. `moon` was the
 original observed case, but the fix is intentionally generalized to all
 `kind: "context-engine"` plugins.
+
+Implementation note:
+
+- part `1` now pre-filters `status-*.js` candidates by the
+  `buildCapabilityEntries` marker before patch evaluation
+- this keeps `--verbose` output focused on real target bundles instead of
+  listing unrelated status helper shards as `SKIPPED`
 
 ## When to use part 2
 

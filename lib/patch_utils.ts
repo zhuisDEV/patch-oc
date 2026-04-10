@@ -22,6 +22,7 @@ export type PatchDefinition = {
   title: string;
   summary: string;
   filePattern: RegExp;
+  candidateContainsAny?: string[];
   backupSuffix: string;
   patchFileContent: (content: string) => PatchDecision;
 };
@@ -131,14 +132,27 @@ export async function resolveOpenclawRoot(explicit?: string): Promise<string> {
 export async function listMatchingDistFiles(
   openclawRoot: string,
   pattern: RegExp,
+  candidateContainsAny?: string[],
 ): Promise<string[]> {
   const distDir = path.join(openclawRoot, "dist");
   const files: string[] = [];
+  const hasContentProbe = Array.isArray(candidateContainsAny) &&
+    candidateContainsAny.length > 0;
 
   for await (const entry of Deno.readDir(distDir)) {
     if (!entry.isFile) continue;
     if (!pattern.test(entry.name)) continue;
-    files.push(path.join(distDir, entry.name));
+    const filePath = path.join(distDir, entry.name);
+
+    if (hasContentProbe) {
+      const content = await Deno.readTextFile(filePath);
+      const matchedProbe = candidateContainsAny.some((needle) =>
+        content.includes(needle)
+      );
+      if (!matchedProbe) continue;
+    }
+
+    files.push(filePath);
   }
 
   files.sort();
@@ -208,10 +222,14 @@ export async function runPatchDefinition(
   const files = await listMatchingDistFiles(
     options.openclawRoot,
     patch.filePattern,
+    patch.candidateContainsAny,
   );
   if (files.length === 0) {
+    const probeHint = patch.candidateContainsAny?.length
+      ? ` and containing one of: ${patch.candidateContainsAny.join(" | ")}`
+      : "";
     throw new Error(
-      `No files matching ${patch.filePattern} found under ${
+      `No files matching ${patch.filePattern}${probeHint} found under ${
         path.join(options.openclawRoot, "dist")
       }`,
     );

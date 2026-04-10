@@ -71,6 +71,7 @@ export const contextEngineCapabilityPatch: PatchDefinition = {
   summary:
     "Fixes status/inspect so any context-engine plugin is counted as a capability instead of hook-only.",
   filePattern: /^status-.*\.js$/,
+  candidateContainsAny: [BUILD_CAPABILITIES_START],
   backupSuffix: ".bak-context-engine-capability",
   patchFileContent: patchContextEngineCapabilityContent,
 };

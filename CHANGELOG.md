@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.7 - 2026-04-10
+
+- Reduced part `1` noisy `SKIPPED` output by adding content-probe prefiltering
+  in patch candidate selection.
+  - new patch-definition field: `candidateContainsAny`
+  - part `1` now only evaluates `status-*.js` files that contain
+    `function buildCapabilityEntries(plugin) {`
+- Added regression test coverage for content-probe file filtering in:
+  - `tests/patch_utils_test.ts`
+- Kept patch behavior unchanged; only candidate selection/output quality
+  improved.
+
 ## v1.0.6 - 2026-04-10
 
 - Added part `3` (`discord-child-primary-binding`) to patch Discord

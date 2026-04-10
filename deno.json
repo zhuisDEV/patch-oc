@@ -1,7 +1,7 @@
 {
   "tasks": {
-    "check": "deno check patch_oc.ts patch_openclaw_context_engine_inspect.ts patch_openclaw_acp_routed_fallback.ts patch_openclaw_discord_child_primary_binding.ts lib/patch_cli.ts lib/patch_utils.ts patches/context_engine_capability.ts patches/acp_routed_fallback.ts patches/discord_child_primary_binding.ts tests/context_engine_capability_test.ts tests/acp_routed_fallback_test.ts tests/discord_child_primary_binding_test.ts",
-    "test": "deno test tests",
+    "check": "deno check patch_oc.ts patch_openclaw_context_engine_inspect.ts patch_openclaw_acp_routed_fallback.ts patch_openclaw_discord_child_primary_binding.ts lib/patch_cli.ts lib/patch_utils.ts patches/context_engine_capability.ts patches/acp_routed_fallback.ts patches/discord_child_primary_binding.ts tests/context_engine_capability_test.ts tests/acp_routed_fallback_test.ts tests/discord_child_primary_binding_test.ts tests/patch_utils_test.ts",
+    "test": "deno test --allow-read --allow-write tests",
     "verify": "deno fmt --check && deno lint && deno task check && deno task test"
   }
 }
