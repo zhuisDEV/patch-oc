@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.0.8 - 2026-04-20
+
+- Documented maintenance status for all three patch parts.
+- Clarified that part `1` is already included in OpenClaw `2026.4.15` and is
+  now primarily a compatibility path for older installs.
+- Clarified that part `2` may become removable once future OpenClaw updates
+  consistently upstream the ACP duplicate-replay fix.
+- Added `handoff.md` to capture release-maintenance guidance for future cleanup
+  decisions, including the current uncertainty around part `3`.
+
 ## v1.0.7 - 2026-04-10
 
 - Reduced part `1` noisy `SKIPPED` output by adding content-probe prefiltering

@@ -4,7 +4,7 @@ Hot patches for installed OpenClaw runtimes.
 
 `patch-oc` is a small Deno-based utility repo for applying targeted fixes
 directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.7` ships three independent patches and lets you
+available yet. Release `v1.0.8` ships three independent patches and lets you
 check or apply part `1`, part `2`, part `3`, or all.
 
 ## Included patches
@@ -14,6 +14,18 @@ check or apply part `1`, part `2`, part `3`, or all.
 | `1`  | context-engine capability classification    | a `kind: "context-engine"` plugin can be reported as `hook-only` in `openclaw status` or `openclaw plugins inspect` | generalized to any context-engine plugin                            |
 | `2`  | ACP routed fallback replay                  | ACP turns can send block text and then replay the same accumulated text again as a final message                    | generalized across direct and routed ACP delivery, not Discord-only |
 | `3`  | Discord child primary binding normalization | thread-bound ACP spawn fails with `thread_binding_invalid` when conversation id is `channel:<id>`                   | Discord child-placement primary binding path                        |
+
+## Maintenance notes
+
+- Part `1` is already included in OpenClaw `2026.4.15`. Keep it only for older
+  installs and remove it from `patch-oc` once that backward-compatibility path
+  is no longer needed.
+- Part `2` has also been fixed by another upstream OpenClaw update path, so it
+  may stop being necessary in a future OpenClaw release. Re-check with
+  `./check.sh --part 2` on newer builds; if future installs consistently report
+  `ALREADY` or stop exposing a target bundle, remove part `2` as well.
+- Part `3` is still uncertain. Keep it for now and decide after more runtime
+  testing confirms whether the patch is still needed.
 
 ## When to use part 1
 
@@ -29,6 +41,12 @@ or inspect output still treats it like a hook-only plugin. `moon` was the
 original observed case, but the fix is intentionally generalized to all
 `kind: "context-engine"` plugins.
 
+Note:
+
+- OpenClaw `2026.4.15` already includes this upstream. On that release and
+  newer, expect `./check.sh --part 1` to report `ALREADY` unless a regression
+  reappears.
+
 Implementation note:
 
 - part `1` now pre-filters `status-*.js` candidates by the
@@ -42,6 +60,13 @@ Part `2` is relevant if an ACP session sends a normal reply first and then
 replays the same full text again at end of turn. The symptom is most obvious in
 Discord ACP Codex sessions, especially on longer replies, but the patch is
 applied at the ACP delivery layer so it is not restricted to Discord.
+
+Note:
+
+- This behavior has also been fixed by another upstream OpenClaw update path.
+  Treat part `2` as a compatibility patch for builds where `./check.sh --part 2`
+  still reports `PATCHED`, and remove it later if future upstream releases make
+  it unnecessary across supported installs.
 
 The runtime-level diagnosis is:
 
@@ -58,6 +83,11 @@ Part `3` is relevant if a Discord thread-bound ACP spawn fails with:
 - `Session binding adapter failed to bind target conversation`
 
 and the failed route uses a `conversationId` in `channel:<id>` format.
+
+Note:
+
+- Need more production testing before deciding whether part `3` should stay or
+  be removed.
 
 The runtime-level diagnosis is:
 
