@@ -6,14 +6,28 @@
 
 ## One-line description
 
-Hot patches for installed OpenClaw runtimes.
+Personal OpenClaw source patches plus legacy runtime hotpatches.
 
 ## What it fixes
 
+- current source patch: Discord reply typing lifecycle starts late or blinks
+  between accepted preflight and real reply dispatch
+- legacy runtime parts:
 - context-engine plugins incorrectly classified as hook-only in status/inspect
 - routed ACP replies replaying the same accumulated text again as a final reply
 - Discord child-placement primary bind failures when conversation id is
   `channel:<id>`
+
+## Current Recommendation
+
+Apply the current source patch from an OpenClaw checkout:
+
+```bash
+git am /path/to/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch
+```
+
+The old runtime parts `1`, `2`, and `3` are deprecated compatibility patches for
+older installs. They are not the default recommendation for current OpenClaw.
 
 ## Generality
 
@@ -24,6 +38,9 @@ Hot patches for installed OpenClaw runtimes.
 
 ## Typical search phrases
 
+- `discord typing starts late`
+- `discord typing gap before reply`
+- `openclaw reply typing lifecycle`
 - `openclaw context-engine hook-only`
 - `openclaw moon hook-only`
 - `openclaw acp duplicate reply`
@@ -35,6 +52,7 @@ Hot patches for installed OpenClaw runtimes.
 ## Canonical commands
 
 ```bash
+git am /path/to/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch
 ./check.sh --part all
 ./apply.sh --part 1
 ./apply.sh --part 2
@@ -43,4 +61,4 @@ Hot patches for installed OpenClaw runtimes.
 
 ## Release
 
-`v1.0.8`
+Unreleased local patch catalog update after `v1.0.8`

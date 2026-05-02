@@ -1,10 +1,23 @@
 # Changelog
 
+## Unreleased - 2026-05-03
+
+- Merged the OpenClaw PR patch workspace into `openclaw-prs/`.
+  - Added `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
+  - Kept the prior PR notes from `/Users/lilac/gh/openclaw-prs`.
+- Marked the existing runtime hotpatch parts `1`, `2`, and `3` as legacy
+  compatibility patches rather than current recommendations.
+- Documented the current review:
+  - part `1` is fixed upstream by context-engine capability entries
+  - part `2` is superseded for the Discord duplicate-reply case by channel
+    delivered-text visibility hooks
+  - part `3` is fixed upstream by Discord binding channel-id normalization
+
 ## v1.0.8 - 2026-04-20
 
 - Documented maintenance status for all three patch parts.
-- Clarified that part `1` is already included in OpenClaw `2026.4.15` and is
-  now primarily a compatibility path for older installs.
+- Clarified that part `1` is already included in OpenClaw `2026.4.15` and is now
+  primarily a compatibility path for older installs.
 - Clarified that part `2` may become removable once future OpenClaw updates
   consistently upstream the ACP duplicate-replay fix.
 - Added `handoff.md` to capture release-maintenance guidance for future cleanup

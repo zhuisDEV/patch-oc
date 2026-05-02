@@ -1,13 +1,25 @@
 # patch-oc
 
-Hot patches for installed OpenClaw runtimes.
+Personal OpenClaw patches and hotfix notes.
 
-`patch-oc` is a small Deno-based utility repo for applying targeted fixes
-directly to OpenClaw's installed `dist/` bundles when an upstream fix is not
-available yet. Release `v1.0.8` ships three independent patches and lets you
-check or apply part `1`, part `2`, part `3`, or all.
+`patch-oc` now keeps two kinds of patches:
+
+- source PR patches that should be applied to an OpenClaw git checkout with
+  `git am`
+- legacy Deno runtime hotpatches for older installed OpenClaw `dist/` bundles
+
+The current recommended patch is the Discord reply typing lifecycle source patch
+in `openclaw-prs/`.
 
 ## Included patches
+
+### Current source patch
+
+| Patch                                                        | Symptom                                                                    | Apply from an OpenClaw source checkout                                                |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch` | Discord reply feedback can start late, then show `typing -> gap -> typing` | `git am /path/to/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch` |
+
+### Legacy runtime hotpatches
 
 | Part | Patch                                       | Symptom                                                                                                             | Scope                                                               |
 | ---- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
@@ -17,17 +29,20 @@ check or apply part `1`, part `2`, part `3`, or all.
 
 ## Maintenance notes
 
-- Part `1` is already included in OpenClaw `2026.4.15`. Keep it only for older
-  installs and remove it from `patch-oc` once that backward-compatibility path
-  is no longer needed.
-- Part `2` has also been fixed by another upstream OpenClaw update path, so it
-  may stop being necessary in a future OpenClaw release. Re-check with
-  `./check.sh --part 2` on newer builds; if future installs consistently report
-  `ALREADY` or stop exposing a target bundle, remove part `2` as well.
-- Part `3` is still uncertain. Keep it for now and decide after more runtime
-  testing confirms whether the patch is still needed.
+- Part `1` is already fixed upstream. Current `openclaw/main` uses
+  `context-engine` capability entries in `src/plugins/inspect-shape.ts`.
+- Part `2` is superseded for the Discord duplicate-reply case by channel-level
+  ACP delivered-text visibility hooks. The older broad runtime transform may
+  still report as applicable against some installed bundles, so do not treat
+  that alone as proof the Discord bug remains.
+- Part `3` is fixed upstream by Discord session-binding normalization paths:
+  child binding now accepts normalized parent channel ids and
+  `resolveChannelIdForBinding(...)` normalizes `channel:<id>` thread inputs.
+- The legacy runtime parts are kept for old installs only. Do not run
+  `./apply.sh --part all` on current OpenClaw unless a specific old runtime
+  check proves one of those compatibility patches is still needed.
 
-## When to use part 1
+## Legacy part 1
 
 Run these checks:
 
@@ -36,16 +51,15 @@ openclaw status
 openclaw plugins inspect <your-context-engine-plugin-id>
 ```
 
-Part `1` is relevant if your active context-engine plugin is in use, but status
-or inspect output still treats it like a hook-only plugin. `moon` was the
-original observed case, but the fix is intentionally generalized to all
-`kind: "context-engine"` plugins.
+Part `1` is only relevant for old installs where your active context-engine
+plugin is in use, but status or inspect output still treats it like a hook-only
+plugin. `moon` was the original observed case, but the fix is intentionally
+generalized to all `kind: "context-engine"` plugins.
 
 Note:
 
-- OpenClaw `2026.4.15` already includes this upstream. On that release and
-  newer, expect `./check.sh --part 1` to report `ALREADY` unless a regression
-  reappears.
+- OpenClaw `2026.4.15` and current upstream already include this fix. Treat part
+  `1` as deprecated unless you are maintaining an older install.
 
 Implementation note:
 
@@ -54,19 +68,18 @@ Implementation note:
 - this keeps `--verbose` output focused on real target bundles instead of
   listing unrelated status helper shards as `SKIPPED`
 
-## When to use part 2
+## Legacy part 2
 
-Part `2` is relevant if an ACP session sends a normal reply first and then
-replays the same full text again at end of turn. The symptom is most obvious in
-Discord ACP Codex sessions, especially on longer replies, but the patch is
-applied at the ACP delivery layer so it is not restricted to Discord.
+Part `2` was relevant if an ACP session sent a normal reply first and then
+replayed the same full text again at end of turn. The symptom was most obvious
+in Discord ACP Codex sessions, especially on longer replies.
 
 Note:
 
-- This behavior has also been fixed by another upstream OpenClaw update path.
-  Treat part `2` as a compatibility patch for builds where `./check.sh --part 2`
-  still reports `PATCHED`, and remove it later if future upstream releases make
-  it unnecessary across supported installs.
+- The tracked Discord case is superseded upstream by channel-level delivered
+  text visibility hooks. The old broad core patch can still report `PATCHED`
+  against some installed bundles, but that does not necessarily mean the Discord
+  duplicate-reply bug remains.
 
 The runtime-level diagnosis is:
 
@@ -75,9 +88,9 @@ The runtime-level diagnosis is:
   visible text
 - end-of-turn fallback replayed the accumulated text as a `final`
 
-## When to use part 3
+## Legacy part 3
 
-Part `3` is relevant if a Discord thread-bound ACP spawn fails with:
+Part `3` was relevant if a Discord thread-bound ACP spawn failed with:
 
 - `thread_binding_invalid`
 - `Session binding adapter failed to bind target conversation`
@@ -86,8 +99,9 @@ and the failed route uses a `conversationId` in `channel:<id>` format.
 
 Note:
 
-- Need more production testing before deciding whether part `3` should stay or
-  be removed.
+- Current upstream includes Discord binding normalization that covers this path.
+  Treat part `3` as deprecated unless you are patching an old install that still
+  has the exact failure.
 
 The runtime-level diagnosis is:
 
@@ -104,7 +118,14 @@ The runtime-level diagnosis is:
 
 ## Quick start
 
-Clone the repo and run a dry check first:
+Apply the current source patch from an OpenClaw checkout:
+
+```bash
+cd /path/to/openclaw
+git am /path/to/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch
+```
+
+For old installed runtime bundles only, run a dry check first:
 
 ```bash
 git clone https://github.com/zhuisDEV/patch-oc.git
@@ -112,13 +133,12 @@ cd patch-oc
 ./check.sh --part all
 ```
 
-Then apply only what you need:
+Then apply only the legacy runtime patch you have verified is needed:
 
 ```bash
 ./apply.sh --part 1
 ./apply.sh --part 2
 ./apply.sh --part 3
-./apply.sh --part all
 ```
 
 ## Agent-friendly flow (single approval)
@@ -133,12 +153,19 @@ mkdir -p ~/.openclaw/lws/vendor
 git clone https://github.com/zhuisDEV/patch-oc.git ~/.openclaw/lws/vendor/patch-oc
 ```
 
-Per patch run:
+For the current source patch:
+
+```bash
+cd /path/to/openclaw
+git am ~/.openclaw/lws/vendor/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch
+```
+
+For old runtime hotpatches only, run:
 
 ```bash
 cd ~/.openclaw/lws/vendor/patch-oc
-./check.sh --part all
-./apply.sh --part all
+./check.sh --part <1|2|3>
+./apply.sh --part <1|2|3>
 ```
 
 This usually reduces approval friction to a single exec approval for the apply
@@ -152,9 +179,12 @@ Use this in your agent prompt/instructions:
 Use existing local checkout at ~/.openclaw/lws/vendor/patch-oc.
 Do not clone patch-oc in normal runs.
 Run:
+  cd /path/to/openclaw
+  git am ~/.openclaw/lws/vendor/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch
+For legacy runtime hotpatches only:
   cd ~/.openclaw/lws/vendor/patch-oc
-  ./check.sh --part <1|2|3|all>
-  ./apply.sh --part <1|2|3|all>
+  ./check.sh --part <1|2|3>
+  ./apply.sh --part <1|2|3>
 ```
 
 ### Optional cleanup after successful apply
@@ -173,7 +203,7 @@ Important:
 - After a future OpenClaw update, clone `patch-oc` again and re-run `check.sh`
   and `apply.sh` if needed.
 
-## CLI usage
+## Legacy Runtime CLI Usage
 
 The main entrypoint is:
 

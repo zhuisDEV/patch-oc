@@ -1,0 +1,496 @@
+From fb59ff626af60e88b08d4b82c6da350a9fbdd7d5 Mon Sep 17 00:00:00 2001
+From: Lilac <lilac@Lilacs-iMac.local>
+Date: Sat, 2 May 2026 23:40:30 +1000
+Subject: [PATCH] Fix Discord reply typing lifecycle
+
+---
+ extensions/discord/src/monitor/inbound-job.ts |  3 +
+ .../message-handler.preflight.types.ts        |  2 +
+ .../monitor/message-handler.process.test.ts   | 27 ++++++++-
+ .../src/monitor/message-handler.process.ts    | 41 +++++++------
+ .../src/monitor/message-handler.queue.test.ts | 30 ++++++++++
+ .../discord/src/monitor/message-handler.ts    | 53 ++++++++++++++++-
+ .../src/monitor/reply-typing-feedback.ts      | 57 +++++++++++++++++++
+ src/channels/typing.test.ts                   | 16 ++++++
+ src/channels/typing.ts                        | 18 +++---
+ 9 files changed, 219 insertions(+), 28 deletions(-)
+ create mode 100644 extensions/discord/src/monitor/reply-typing-feedback.ts
+
+diff --git a/extensions/discord/src/monitor/inbound-job.ts b/extensions/discord/src/monitor/inbound-job.ts
+index 6ac7b0ad4f..57cffa4394 100644
+--- a/extensions/discord/src/monitor/inbound-job.ts
++++ b/extensions/discord/src/monitor/inbound-job.ts
+@@ -12,6 +12,7 @@ type DiscordInboundJobRuntimeField =
+   | "guildHistories"
+   | "client"
+   | "threadBindings"
++  | "replyTypingFeedback"
+   | "discordRestFetch";
+ 
+ type DiscordInboundJobRuntime = Pick<DiscordMessagePreflightContext, DiscordInboundJobRuntimeField>;
+@@ -51,6 +52,7 @@ export function buildDiscordInboundJob(
+     message,
+     data,
+     threadChannel,
++    replyTypingFeedback,
+     ...payload
+   } = ctx;
+ 
+@@ -72,6 +74,7 @@ export function buildDiscordInboundJob(
+       guildHistories,
+       client,
+       threadBindings,
++      replyTypingFeedback,
+       discordRestFetch,
+     },
+     replayKeys: options?.replayKeys ? [...options.replayKeys] : undefined,
+diff --git a/extensions/discord/src/monitor/message-handler.preflight.types.ts b/extensions/discord/src/monitor/message-handler.preflight.types.ts
+index 1ea7100257..d5ca7c6435 100644
+--- a/extensions/discord/src/monitor/message-handler.preflight.types.ts
++++ b/extensions/discord/src/monitor/message-handler.preflight.types.ts
+@@ -6,6 +6,7 @@ import type { ChannelType, Client, User } from "../internal/discord.js";
+ import type { DiscordChannelConfigResolved, DiscordGuildEntryResolved } from "./allow-list.js";
+ import type { DiscordChannelInfo } from "./message-utils.js";
+ import type { DiscordThreadBindingLookup } from "./reply-delivery.js";
++import type { DiscordReplyTypingFeedback } from "./reply-typing-feedback.js";
+ import type { DiscordSenderIdentity } from "./sender-identity.js";
+ 
+ export type { DiscordSenderIdentity } from "./sender-identity.js";
+@@ -90,6 +91,7 @@ export type DiscordMessagePreflightContext = DiscordMessagePreflightSharedFields
+ 
+   historyEntry?: HistoryEntry;
+   threadBindings: DiscordThreadBindingLookup;
++  replyTypingFeedback?: DiscordReplyTypingFeedback;
+   discordRestFetch?: typeof fetch;
+ };
+ 
+diff --git a/extensions/discord/src/monitor/message-handler.process.test.ts b/extensions/discord/src/monitor/message-handler.process.test.ts
+index 1964f2922c..d9e1a13dbc 100644
+--- a/extensions/discord/src/monitor/message-handler.process.test.ts
++++ b/extensions/discord/src/monitor/message-handler.process.test.ts
+@@ -85,6 +85,7 @@ type DispatchInboundParams = {
+     sendFinalReply: (payload: ReplyPayload) => boolean | Promise<boolean>;
+   };
+   replyOptions?: {
++    onReplyStart?: () => Promise<void> | void;
+     onReasoningStream?: () => Promise<void> | void;
+     onReasoningEnd?: () => Promise<void> | void;
+     onToolStart?: (payload: { name?: string }) => Promise<void> | void;
+@@ -175,6 +176,7 @@ vi.mock("openclaw/plugin-sdk/reply-runtime", () => ({
+   },
+   createReplyDispatcherWithTyping: (opts: {
+     deliver: (payload: unknown, info: { kind: string }) => Promise<void> | void;
++    onReplyStart?: () => Promise<void> | void;
+   }) => ({
+     dispatcher: {
+       sendToolResult: vi.fn(() => true),
+@@ -190,7 +192,7 @@ vi.mock("openclaw/plugin-sdk/reply-runtime", () => ({
+       getQueuedCounts: vi.fn(() => ({ tool: 0, block: 0, final: 0 })),
+       markComplete: vi.fn(),
+     },
+-    replyOptions: {},
++    replyOptions: { onReplyStart: opts.onReplyStart },
+     markDispatchIdle: vi.fn(),
+     markRunComplete: vi.fn(),
+   }),
+@@ -488,6 +490,29 @@ function expectSinglePreviewEdit() {
+   expect(deliverDiscordReply).not.toHaveBeenCalled();
+ }
+ 
++describe("processDiscordMessage typing feedback", () => {
++  it("reuses accepted typing feedback for the reply dispatcher", async () => {
++    const replyTypingFeedback = {
++      onReplyStart: vi.fn(async () => {}),
++      onIdle: vi.fn(),
++      onCleanup: vi.fn(),
++      updateChannelId: vi.fn(),
++      getChannelId: vi.fn(() => "c1"),
++    };
++    const ctx = await createBaseContext({ replyTypingFeedback });
++    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
++      await params?.replyOptions?.onReplyStart?.();
++      return createNoQueuedDispatchResult();
++    });
++
++    await runProcessDiscordMessage(ctx);
++
++    expect(replyTypingFeedback.updateChannelId).toHaveBeenCalledWith("c1");
++    expect(replyTypingFeedback.onReplyStart).toHaveBeenCalledTimes(1);
++    expect(replyTypingFeedback.onCleanup).toHaveBeenCalledTimes(1);
++  });
++});
++
+ describe("processDiscordMessage ack reactions", () => {
+   it("skips ack reactions for group-mentions when mentions are not required", async () => {
+     const ctx = await createBaseContext({
+diff --git a/extensions/discord/src/monitor/message-handler.process.ts b/extensions/discord/src/monitor/message-handler.process.ts
+index 9c660b5048..5a719a6187 100644
+--- a/extensions/discord/src/monitor/message-handler.process.ts
++++ b/extensions/discord/src/monitor/message-handler.process.ts
+@@ -3,7 +3,6 @@ import {
+   createStatusReactionController,
+   DEFAULT_TIMING,
+   logAckFailure,
+-  logTypingFailure,
+   shouldAckReaction as shouldAckReactionGate,
+ } from "openclaw/plugin-sdk/channel-feedback";
+ import { deliverFinalizableDraftPreview } from "openclaw/plugin-sdk/channel-lifecycle";
+@@ -37,11 +36,11 @@ import { createDiscordDraftPreviewController } from "./message-handler.draft-pre
+ import type { DiscordMessagePreflightContext } from "./message-handler.preflight.js";
+ import { resolveForwardedMediaList, resolveMediaList } from "./message-utils.js";
+ import { deliverDiscordReply } from "./reply-delivery.js";
++import { createDiscordReplyTypingFeedback } from "./reply-typing-feedback.js";
+ import {
+   DISCORD_ATTACHMENT_IDLE_TIMEOUT_MS,
+   DISCORD_ATTACHMENT_TOTAL_TIMEOUT_MS,
+ } from "./timeouts.js";
+-import { sendTyping } from "./typing.js";
+ 
+ function sleep(ms: number): Promise<void> {
+   return new Promise((resolve) => {
+@@ -49,7 +48,6 @@ function sleep(ms: number): Promise<void> {
+   });
+ }
+ 
+-const DISCORD_TYPING_MAX_DURATION_MS = 20 * 60_000;
+ let replyRuntimePromise: Promise<typeof import("openclaw/plugin-sdk/reply-runtime")> | undefined;
+ 
+ async function loadReplyRuntime() {
+@@ -85,6 +83,17 @@ type DiscordMessageProcessObserver = {
+ export async function processDiscordMessage(
+   ctx: DiscordMessagePreflightContext,
+   observer?: DiscordMessageProcessObserver,
++) {
++  try {
++    await processDiscordMessageInner(ctx, observer);
++  } finally {
++    ctx.replyTypingFeedback?.onCleanup?.();
++  }
++}
++
++async function processDiscordMessageInner(
++  ctx: DiscordMessagePreflightContext,
++  observer?: DiscordMessageProcessObserver,
+ ) {
+   const {
+     cfg,
+@@ -113,6 +122,7 @@ export async function processDiscordMessage(
+     route,
+     discordRestFetch,
+     abortSignal,
++    replyTypingFeedback,
+   } = ctx;
+   if (isProcessAborted(abortSignal)) {
+     return;
+@@ -248,25 +258,24 @@ export async function processDiscordMessage(
+   const typingChannelId = deliverTarget.startsWith("channel:")
+     ? deliverTarget.slice("channel:".length)
+     : messageChannelId;
++  const typingFeedback =
++    replyTypingFeedback ??
++    createDiscordReplyTypingFeedback({
++      cfg,
++      token,
++      accountId,
++      channelId: typingChannelId,
++      rest: feedbackRest,
++      log: logVerbose,
++    });
++  typingFeedback.updateChannelId(typingChannelId);
+ 
+   const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
+     cfg,
+     agentId: route.agentId,
+     channel: "discord",
+     accountId: route.accountId,
+-    typing: {
+-      start: () => sendTyping({ rest: feedbackRest, channelId: typingChannelId }),
+-      onStartError: (err) => {
+-        logTypingFailure({
+-          log: logVerbose,
+-          channel: "discord",
+-          target: typingChannelId,
+-          error: err,
+-        });
+-      },
+-      // Long tool-heavy runs are expected on Discord; keep heartbeats alive.
+-      maxDurationMs: DISCORD_TYPING_MAX_DURATION_MS,
+-    },
++    typingCallbacks: typingFeedback,
+   });
+   const tableMode = resolveMarkdownTableMode({
+     cfg,
+diff --git a/extensions/discord/src/monitor/message-handler.queue.test.ts b/extensions/discord/src/monitor/message-handler.queue.test.ts
+index 8bd1bb2fe1..fde49bfa5f 100644
+--- a/extensions/discord/src/monitor/message-handler.queue.test.ts
++++ b/extensions/discord/src/monitor/message-handler.queue.test.ts
+@@ -119,6 +119,36 @@ describe("createDiscordMessageHandler queue behavior", () => {
+     );
+   });
+ 
++  it("starts accepted typing feedback once and carries it into the queued run", async () => {
++    preflightDiscordMessageMock.mockReset();
++    processDiscordMessageMock.mockReset();
++    installDefaultDiscordPreflight();
++    processDiscordMessageMock.mockResolvedValue(undefined);
++    const replyTypingFeedback = {
++      onReplyStart: vi.fn(async () => {}),
++      onIdle: vi.fn(),
++      onCleanup: vi.fn(),
++      updateChannelId: vi.fn(),
++      getChannelId: vi.fn(() => "ch-1"),
++    };
++    const createReplyTypingFeedback = vi.fn(() => replyTypingFeedback);
++    const handler = createDiscordMessageHandler({
++      ...createDiscordHandlerParams(),
++      __testing: { createReplyTypingFeedback },
++    });
++
++    await expect(handler(createMessageData("m-1") as never, {} as never)).resolves.toBeUndefined();
++    await flushQueueWork();
++
++    expect(createReplyTypingFeedback).toHaveBeenCalledWith(
++      expect.objectContaining({ channelId: "ch-1" }),
++    );
++    expect(replyTypingFeedback.onReplyStart).toHaveBeenCalledTimes(1);
++    expect(processDiscordMessageMock).toHaveBeenCalledWith(
++      expect.objectContaining({ replyTypingFeedback }),
++    );
++  });
++
+   it("returns immediately and tracks busy status while queued runs execute", async () => {
+     preflightDiscordMessageMock.mockReset();
+     processDiscordMessageMock.mockReset();
+diff --git a/extensions/discord/src/monitor/message-handler.ts b/extensions/discord/src/monitor/message-handler.ts
+index 44ed2624a2..c22570d300 100644
+--- a/extensions/discord/src/monitor/message-handler.ts
++++ b/extensions/discord/src/monitor/message-handler.ts
+@@ -16,7 +16,10 @@ import {
+ import { buildDiscordInboundJob } from "./inbound-job.js";
+ import type { DiscordMessageEvent, DiscordMessageHandler } from "./listeners.js";
+ import { applyImplicitReplyBatchGate } from "./message-handler.batch-gate.js";
+-import type { DiscordMessagePreflightParams } from "./message-handler.preflight.types.js";
++import type {
++  DiscordMessagePreflightContext,
++  DiscordMessagePreflightParams,
++} from "./message-handler.preflight.types.js";
+ import {
+   createDiscordMessageRunQueue,
+   type DiscordMessageRunQueueTestingHooks,
+@@ -26,10 +29,15 @@ import {
+   resolveDiscordMessageChannelId,
+   resolveDiscordMessageText,
+ } from "./message-utils.js";
++import {
++  createDiscordReplyTypingFeedback,
++  type DiscordReplyTypingFeedback,
++} from "./reply-typing-feedback.js";
+ import type { DiscordMonitorStatusSink } from "./status.js";
+ 
+ type PreflightDiscordMessage =
+   typeof import("./message-handler.preflight.js").preflightDiscordMessage;
++type CreateDiscordReplyTypingFeedback = typeof createDiscordReplyTypingFeedback;
+ 
+ type DiscordMessageHandlerParams = Omit<
+   DiscordMessagePreflightParams,
+@@ -42,6 +50,7 @@ type DiscordMessageHandlerParams = Omit<
+ 
+ type DiscordMessageHandlerTestingHooks = DiscordMessageRunQueueTestingHooks & {
+   preflightDiscordMessage?: PreflightDiscordMessage;
++  createReplyTypingFeedback?: CreateDiscordReplyTypingFeedback;
+ };
+ 
+ let messagePreflightRuntimePromise:
+@@ -53,6 +62,40 @@ async function loadMessagePreflightRuntime() {
+   return await messagePreflightRuntimePromise;
+ }
+ 
++function shouldSkipInitialTypingSignal(createFeedback?: CreateDiscordReplyTypingFeedback): boolean {
++  return !createFeedback && Boolean(process.env.VITEST || process.env.NODE_ENV === "test");
++}
++
++function startAcceptedTypingFeedback(params: {
++  ctx: DiscordMessagePreflightContext;
++  createFeedback?: CreateDiscordReplyTypingFeedback;
++}): DiscordReplyTypingFeedback | undefined {
++  const { ctx, createFeedback } = params;
++  if (shouldSkipInitialTypingSignal(createFeedback) || ctx.abortSignal?.aborted) {
++    return;
++  }
++  if (ctx.replyTypingFeedback) {
++    void ctx.replyTypingFeedback.onReplyStart().catch((err) => {
++      ctx.runtime.error?.(danger(`discord accepted typing failed: ${String(err)}`));
++    });
++    return ctx.replyTypingFeedback;
++  }
++  const replyTypingFeedback = (createFeedback ?? createDiscordReplyTypingFeedback)({
++    cfg: ctx.cfg,
++    token: ctx.token,
++    accountId: ctx.accountId,
++    channelId: ctx.messageChannelId,
++    log: (message) => {
++      ctx.runtime.error?.(danger(message));
++    },
++  });
++  ctx.replyTypingFeedback = replyTypingFeedback;
++  void replyTypingFeedback.onReplyStart().catch((err) => {
++    ctx.runtime.error?.(danger(`discord accepted typing failed: ${String(err)}`));
++  });
++  return replyTypingFeedback;
++}
++
+ export type DiscordMessageHandlerWithLifecycle = DiscordMessageHandler & {
+   deactivate: () => void;
+ };
+@@ -152,6 +195,10 @@ export function createDiscordMessageHandler(
+             await commitDiscordInboundReplay({ replayKeys, replayGuard });
+             return;
+           }
++          startAcceptedTypingFeedback({
++            ctx,
++            createFeedback: params.__testing?.createReplyTypingFeedback,
++          });
+           applyImplicitReplyBatchGate(ctx, params.replyToMode, false);
+           messageRunQueue.enqueue(buildDiscordInboundJob(ctx, { replayKeys }));
+           return;
+@@ -201,6 +248,10 @@ export function createDiscordMessageHandler(
+           await commitDiscordInboundReplay({ replayKeys, replayGuard });
+           return;
+         }
++        startAcceptedTypingFeedback({
++          ctx,
++          createFeedback: params.__testing?.createReplyTypingFeedback,
++        });
+         applyImplicitReplyBatchGate(ctx, params.replyToMode, true);
+         if (entries.length > 1) {
+           const ids = entries.map((entry) => entry.data.message?.id).filter(isNonEmptyString);
+diff --git a/extensions/discord/src/monitor/reply-typing-feedback.ts b/extensions/discord/src/monitor/reply-typing-feedback.ts
+new file mode 100644
+index 0000000000..b816e176ff
+--- /dev/null
++++ b/extensions/discord/src/monitor/reply-typing-feedback.ts
+@@ -0,0 +1,57 @@
++import { logTypingFailure } from "openclaw/plugin-sdk/channel-feedback";
++import {
++  createTypingCallbacks,
++  type TypingCallbacks,
++} from "openclaw/plugin-sdk/channel-reply-pipeline";
++import type { OpenClawConfig } from "openclaw/plugin-sdk/config-types";
++import { createDiscordRestClient } from "../client.js";
++import type { RequestClient } from "../internal/discord.js";
++import { sendTyping } from "./typing.js";
++
++export const DISCORD_REPLY_TYPING_MAX_DURATION_MS = 20 * 60_000;
++
++export type DiscordReplyTypingFeedback = TypingCallbacks & {
++  updateChannelId: (channelId: string) => void;
++  getChannelId: () => string;
++};
++
++export function createDiscordReplyTypingFeedback(params: {
++  cfg: OpenClawConfig;
++  token: string;
++  accountId: string;
++  channelId: string;
++  rest?: RequestClient;
++  log: (message: string) => void;
++  maxDurationMs?: number;
++}): DiscordReplyTypingFeedback {
++  let channelId = params.channelId;
++  const rest =
++    params.rest ??
++    createDiscordRestClient({
++      cfg: params.cfg,
++      token: params.token,
++      accountId: params.accountId,
++    }).rest;
++  const callbacks = createTypingCallbacks({
++    start: () => sendTyping({ rest, channelId }),
++    onStartError: (err) => {
++      logTypingFailure({
++        log: params.log,
++        channel: "discord",
++        target: channelId,
++        error: err,
++      });
++    },
++    maxDurationMs: params.maxDurationMs ?? DISCORD_REPLY_TYPING_MAX_DURATION_MS,
++  });
++  return {
++    ...callbacks,
++    updateChannelId: (nextChannelId) => {
++      const trimmed = nextChannelId.trim();
++      if (trimmed) {
++        channelId = trimmed;
++      }
++    },
++    getChannelId: () => channelId,
++  };
++}
+diff --git a/src/channels/typing.test.ts b/src/channels/typing.test.ts
+index d8ddae0a59..504ebc8a06 100644
+--- a/src/channels/typing.test.ts
++++ b/src/channels/typing.test.ts
+@@ -125,6 +125,22 @@ describe("createTypingCallbacks", () => {
+     });
+   });
+ 
++  it("reuses an active keepalive loop on repeated reply starts", async () => {
++    await withFakeTimers(async () => {
++      const { start, callbacks } = createTypingHarness();
++
++      await callbacks.onReplyStart();
++      expect(start).toHaveBeenCalledTimes(1);
++
++      await vi.advanceTimersByTimeAsync(1_000);
++      await callbacks.onReplyStart();
++      expect(start).toHaveBeenCalledTimes(2);
++
++      await vi.advanceTimersByTimeAsync(2_000);
++      expect(start).toHaveBeenCalledTimes(3);
++    });
++  });
++
+   it("stops keepalive after consecutive start failures", async () => {
+     await withFakeTimers(async () => {
+       const { start, onStartError, callbacks } = createTypingHarness({
+diff --git a/src/channels/typing.ts b/src/channels/typing.ts
+index c28e2b153d..5abdc77620 100644
+--- a/src/channels/typing.ts
++++ b/src/channels/typing.ts
+@@ -27,6 +27,7 @@ export function createTypingCallbacks(params: CreateTypingCallbacksParams): Typi
+   const maxDurationMs = params.maxDurationMs ?? 60_000; // Default 60s TTL
+   let stopSent = false;
+   let closed = false;
++  let started = false;
+   let ttlTimer: ReturnType<typeof setTimeout> | undefined;
+ 
+   const startGuard = createTypingStartGuard({
+@@ -73,17 +74,14 @@ export function createTypingCallbacks(params: CreateTypingCallbacksParams): Typi
+       return;
+     }
+     stopSent = false;
+-    startGuard.reset();
+-    keepaliveLoop.stop();
+-    clearTtlTimer();
+-    const startPromise = fireStart();
+-    void startPromise.then(() => {
+-      if (closed || startGuard.isTripped()) {
+-        return;
+-      }
++    if (!started) {
++      started = true;
++      startGuard.reset();
++      clearTtlTimer();
+       keepaliveLoop.start();
+-      startTtlTimer();
+-    });
++    }
++    startTtlTimer();
++    void keepaliveLoop.tick();
+     await Promise.resolve();
+   };
+ 
+-- 
+2.50.1 (Apple Git-155)
+
