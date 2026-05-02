@@ -6,7 +6,14 @@
   `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
 - Upstream draft PR: `https://github.com/openclaw/openclaw/pull/76091`
 - Branch: `zhuisDEV/codex/discord-reply-typing-lifecycle`
-- Commit: `fb59ff626af60e88b08d4b82c6da350a9fbdd7d5`
+- Latest commit: `42242c8396a8a19261efb446fe948573473a7828`
+- Patch file now contains a two-commit `git am` mailbox:
+  - `fb59ff626af60e88b08d4b82c6da350a9fbdd7d5`
+    `Fix Discord reply typing lifecycle`
+  - `42242c8396a8a19261efb446fe948573473a7828`
+    `fix(discord): clean skipped reply typing feedback`
+- Current patch SHA-256:
+  `b1291714981d3d6c4272788aa27f23e9d4a8df55aa20fb168893cf8d9ef3e125`
 - Apply from an OpenClaw source checkout with:
   `git am /path/to/patch-oc/current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
 

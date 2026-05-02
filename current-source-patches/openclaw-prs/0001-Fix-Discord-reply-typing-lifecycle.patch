@@ -1,7 +1,7 @@
 From fb59ff626af60e88b08d4b82c6da350a9fbdd7d5 Mon Sep 17 00:00:00 2001
 From: Lilac <lilac@Lilacs-iMac.local>
 Date: Sat, 2 May 2026 23:40:30 +1000
-Subject: [PATCH] Fix Discord reply typing lifecycle
+Subject: [PATCH 1/2] Fix Discord reply typing lifecycle
 
 ---
  extensions/discord/src/monitor/inbound-job.ts |  3 +
@@ -491,6 +491,296 @@ index c28e2b153d..5abdc77620 100644
      await Promise.resolve();
    };
  
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 42242c8396a8a19261efb446fe948573473a7828 Mon Sep 17 00:00:00 2001
+From: Lilac <lilac@Lilacs-iMac.modem>
+Date: Sun, 3 May 2026 09:41:21 +1000
+Subject: [PATCH 2/2] fix(discord): clean skipped reply typing feedback
+
+---
+ CHANGELOG.md                                  |  1 +
+ docs/plugins/sdk-subpaths.md                  |  2 +-
+ .../src/monitor/message-handler.queue.test.ts | 74 +++++++++++++++++--
+ .../discord/src/monitor/message-handler.ts    |  2 +-
+ .../discord/src/monitor/message-run-queue.ts  | 37 ++++++++--
+ src/plugin-sdk/channel-lifecycle.core.ts      | 17 ++++-
+ .../channel-lifecycle.queue.test.ts           |  4 +-
+ 7 files changed, 116 insertions(+), 21 deletions(-)
+
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index e3a95b12c9..dc72854efd 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -35,6 +35,7 @@ Docs: https://docs.openclaw.ai
+ - Subagents: honor `sessions_spawn` with `expectsCompletionMessage: false` by skipping parent completion handoff delivery while still running child cleanup. Fixes #75848. Thanks @alfredjbclaw.
+ - Media/completions: treat media-only message-tool sends as delivered async completion output, avoiding duplicate raw `MEDIA:` fallback posts after video or music generation finishes.
+ - Gateway/logging: keep deferred channel startup logs on the subsystem logger, so Slack, Discord, Telegram, and voice-call startup messages keep timestamped prefixes. Thanks @vincentkoc.
++- Discord/replies: start accepted reply typing feedback before queued processing and clean it up when skipped queued work never starts, avoiding late or blinking Discord typing indicators. Thanks @zhuisDEV.
+ - Codex/app-server: recover JSON-RPC frames split by raw command-output newlines and include a redacted preview when malformed app-server messages still reach the console. Thanks @vincentkoc.
+ - Replies/typing: keep typing alive for queued follow-up messages that are genuinely waiting behind an active run, instead of making chat surfaces look idle while work is queued. Fixes #65685. Thanks @papag00se.
+ - ACP/Discord: suppress completion announce delivery for inline thread-bound ACP session runs, so Discord thread-bound ACP replies are not delivered twice. Fixes #60780. Thanks @solavrc.
+diff --git a/docs/plugins/sdk-subpaths.md b/docs/plugins/sdk-subpaths.md
+index 1c3943ad96..13febf7c12 100644
+--- a/docs/plugins/sdk-subpaths.md
++++ b/docs/plugins/sdk-subpaths.md
+@@ -64,7 +64,7 @@ For the plugin authoring guide, see [Plugin SDK overview](/plugins/sdk-overview)
+     | `plugin-sdk/telegram-command-config` | Telegram custom-command normalization/validation helpers with bundled-contract fallback |
+     | `plugin-sdk/command-gating` | Narrow command authorization gate helpers |
+     | `plugin-sdk/channel-policy` | `resolveChannelGroupRequireMention` |
+-    | `plugin-sdk/channel-lifecycle` | `createAccountStatusSink`, `createChannelRunQueue`, draft stream lifecycle/finalization helpers |
++    | `plugin-sdk/channel-lifecycle` | `createAccountStatusSink`, `createChannelRunQueue` including skipped-run cleanup hooks, draft stream lifecycle/finalization helpers |
+     | `plugin-sdk/inbound-envelope` | Shared inbound route + envelope builder helpers |
+     | `plugin-sdk/inbound-reply-dispatch` | Shared inbound record-and-dispatch helpers |
+     | `plugin-sdk/messaging-targets` | Target parsing/matching helpers |
+diff --git a/extensions/discord/src/monitor/message-handler.queue.test.ts b/extensions/discord/src/monitor/message-handler.queue.test.ts
+index fde49bfa5f..8844141b0b 100644
+--- a/extensions/discord/src/monitor/message-handler.queue.test.ts
++++ b/extensions/discord/src/monitor/message-handler.queue.test.ts
+@@ -54,6 +54,16 @@ function createPreflightContext(channelId = "ch-1") {
+   };
+ }
+ 
++function createReplyTypingFeedbackMock(channelId = "ch-1") {
++  return {
++    onReplyStart: vi.fn(async () => {}),
++    onIdle: vi.fn(),
++    onCleanup: vi.fn(),
++    updateChannelId: vi.fn(),
++    getChannelId: vi.fn(() => channelId),
++  };
++}
++
+ function createHandlerWithDefaultPreflight(overrides?: { setStatus?: SetStatusFn }) {
+   preflightDiscordMessageMock.mockImplementation(async (params: { data: { channel_id: string } }) =>
+     createPreflightContext(params.data.channel_id),
+@@ -124,13 +134,7 @@ describe("createDiscordMessageHandler queue behavior", () => {
+     processDiscordMessageMock.mockReset();
+     installDefaultDiscordPreflight();
+     processDiscordMessageMock.mockResolvedValue(undefined);
+-    const replyTypingFeedback = {
+-      onReplyStart: vi.fn(async () => {}),
+-      onIdle: vi.fn(),
+-      onCleanup: vi.fn(),
+-      updateChannelId: vi.fn(),
+-      getChannelId: vi.fn(() => "ch-1"),
+-    };
++    const replyTypingFeedback = createReplyTypingFeedbackMock();
+     const createReplyTypingFeedback = vi.fn(() => replyTypingFeedback);
+     const handler = createDiscordMessageHandler({
+       ...createDiscordHandlerParams(),
+@@ -424,6 +428,56 @@ describe("createDiscordMessageHandler queue behavior", () => {
+     preflightDiscordMessageMock.mockReset();
+     processDiscordMessageMock.mockReset();
+ 
++    const firstRun = createDeferred();
++    const firstFeedback = createReplyTypingFeedbackMock();
++    const skippedFeedback = createReplyTypingFeedbackMock();
++    const feedbackQueue = [firstFeedback, skippedFeedback];
++    const createReplyTypingFeedback = vi.fn(() => {
++      const feedback = feedbackQueue.shift();
++      if (!feedback) {
++        throw new Error("unexpected reply typing feedback creation");
++      }
++      return feedback;
++    });
++    processDiscordMessageMock
++      .mockImplementationOnce(async (ctx: { replyTypingFeedback?: { onCleanup?: () => void } }) => {
++        try {
++          await firstRun.promise;
++        } finally {
++          ctx.replyTypingFeedback?.onCleanup?.();
++        }
++      })
++      .mockImplementationOnce(async () => undefined);
++    preflightDiscordMessageMock.mockImplementation(
++      async (params: { data: { channel_id: string } }) =>
++        createPreflightContext(params.data.channel_id),
++    );
++
++    const handler = createDiscordMessageHandler({
++      ...createDiscordHandlerParams(),
++      __testing: { createReplyTypingFeedback },
++    });
++    await expect(handler(createMessageData("m-1") as never, {} as never)).resolves.toBeUndefined();
++    await flushQueueWork();
++    expect(processDiscordMessageMock).toHaveBeenCalledTimes(1);
++
++    await expect(handler(createMessageData("m-2") as never, {} as never)).resolves.toBeUndefined();
++    handler.deactivate();
++
++    firstRun.resolve();
++    await firstRun.promise;
++    await flushQueueWork();
++
++    expect(createReplyTypingFeedback).toHaveBeenCalledTimes(2);
++    expect(processDiscordMessageMock).toHaveBeenCalledTimes(1);
++    expect(firstFeedback.onCleanup).toHaveBeenCalledTimes(1);
++    expect(skippedFeedback.onCleanup).toHaveBeenCalledTimes(1);
++  });
++
++  it("retries duplicate deliveries after a queued run is skipped before processing", async () => {
++    preflightDiscordMessageMock.mockReset();
++    processDiscordMessageMock.mockReset();
++
+     const firstRun = createDeferred();
+     processDiscordMessageMock
+       .mockImplementationOnce(async () => {
+@@ -445,9 +499,13 @@ describe("createDiscordMessageHandler queue behavior", () => {
+ 
+     firstRun.resolve();
+     await firstRun.promise;
+-    await Promise.resolve();
++    await flushQueueWork();
+ 
+     expect(processDiscordMessageMock).toHaveBeenCalledTimes(1);
++
++    await expect(handler(createMessageData("m-2") as never, {} as never)).resolves.toBeUndefined();
++    await flushQueueWork();
++    expect(preflightDiscordMessageMock).toHaveBeenCalledTimes(3);
+   });
+ 
+   it("preserves non-debounced message ordering by awaiting debouncer enqueue", async () => {
+diff --git a/extensions/discord/src/monitor/message-handler.ts b/extensions/discord/src/monitor/message-handler.ts
+index c22570d300..a96522e0d9 100644
+--- a/extensions/discord/src/monitor/message-handler.ts
++++ b/extensions/discord/src/monitor/message-handler.ts
+@@ -72,7 +72,7 @@ function startAcceptedTypingFeedback(params: {
+ }): DiscordReplyTypingFeedback | undefined {
+   const { ctx, createFeedback } = params;
+   if (shouldSkipInitialTypingSignal(createFeedback) || ctx.abortSignal?.aborted) {
+-    return;
++    return undefined;
+   }
+   if (ctx.replyTypingFeedback) {
+     void ctx.replyTypingFeedback.onReplyStart().catch((err) => {
+diff --git a/extensions/discord/src/monitor/message-run-queue.ts b/extensions/discord/src/monitor/message-run-queue.ts
+index 16a546dbd1..657e083132 100644
+--- a/extensions/discord/src/monitor/message-run-queue.ts
++++ b/extensions/discord/src/monitor/message-run-queue.ts
+@@ -73,6 +73,21 @@ async function processDiscordQueuedMessage(params: {
+   }
+ }
+ 
++function cleanupSkippedDiscordQueuedMessage(params: {
++  job: DiscordInboundJob;
++  replayGuard: ClaimableDedupe;
++}) {
++  try {
++    params.job.runtime.replyTypingFeedback?.onCleanup?.();
++  } finally {
++    releaseDiscordInboundReplay({
++      replayKeys: params.job.replayKeys,
++      error: new DiscordRetryableInboundError("discord queued run skipped before processing"),
++      replayGuard: params.replayGuard,
++    });
++  }
++}
++
+ export function createDiscordMessageRunQueue(
+   params: DiscordMessageRunQueueParams,
+ ): DiscordMessageRunQueue {
+@@ -87,14 +102,20 @@ export function createDiscordMessageRunQueue(
+ 
+   return {
+     enqueue(job) {
+-      runQueue.enqueue(job.queueKey, async ({ lifecycleSignal }) => {
+-        await processDiscordQueuedMessage({
+-          job,
+-          lifecycleSignal,
+-          replayGuard,
+-          testing: params.__testing,
+-        });
+-      });
++      runQueue.enqueue(
++        job.queueKey,
++        async ({ lifecycleSignal }) => {
++          await processDiscordQueuedMessage({
++            job,
++            lifecycleSignal,
++            replayGuard,
++            testing: params.__testing,
++          });
++        },
++        {
++          onSkip: () => cleanupSkippedDiscordQueuedMessage({ job, replayGuard }),
++        },
++      );
+     },
+     deactivate: runQueue.deactivate,
+   };
+diff --git a/src/plugin-sdk/channel-lifecycle.core.ts b/src/plugin-sdk/channel-lifecycle.core.ts
+index ef3ae7c4e0..40421ded00 100644
+--- a/src/plugin-sdk/channel-lifecycle.core.ts
++++ b/src/plugin-sdk/channel-lifecycle.core.ts
+@@ -17,8 +17,16 @@ export type ChannelRunQueueTaskContext = {
+   lifecycleSignal?: AbortSignal;
+ };
+ 
++export type ChannelRunQueueTaskOptions = {
++  onSkip?: () => void | Promise<void>;
++};
++
+ export type ChannelRunQueue = {
+-  enqueue: (key: string, task: (context: ChannelRunQueueTaskContext) => Promise<void>) => void;
++  enqueue: (
++    key: string,
++    task: (context: ChannelRunQueueTaskContext) => Promise<void>,
++    options?: ChannelRunQueueTaskOptions,
++  ) => void;
+   deactivate: () => void;
+ };
+ 
+@@ -59,15 +67,20 @@ export function createChannelRunQueue(params: ChannelRunQueueParams): ChannelRun
+   };
+ 
+   return {
+-    enqueue(key, task) {
++    enqueue(key, task, options) {
++      const onSkip = async () => {
++        await options?.onSkip?.();
++      };
+       void queue
+         .enqueue(key, async () => {
+           if (!runState.isActive()) {
++            await onSkip();
+             return;
+           }
+           runState.onRunStart();
+           try {
+             if (!runState.isActive()) {
++              await onSkip();
+               return;
+             }
+             await task({ lifecycleSignal: params.abortSignal });
+diff --git a/src/plugin-sdk/channel-lifecycle.queue.test.ts b/src/plugin-sdk/channel-lifecycle.queue.test.ts
+index d4afb4aa71..f2830981b2 100644
+--- a/src/plugin-sdk/channel-lifecycle.queue.test.ts
++++ b/src/plugin-sdk/channel-lifecycle.queue.test.ts
+@@ -92,12 +92,13 @@ describe("createChannelRunQueue", () => {
+   it("skips queued work after deactivation", async () => {
+     const first = createDeferred();
+     const task = vi.fn();
++    const onSkip = vi.fn();
+     const queue = createChannelRunQueue({});
+ 
+     queue.enqueue("key", async () => {
+       await first.promise;
+     });
+-    queue.enqueue("key", task);
++    queue.enqueue("key", task, { onSkip });
+     await flushAsyncWork();
+ 
+     queue.deactivate();
+@@ -106,5 +107,6 @@ describe("createChannelRunQueue", () => {
+     await flushAsyncWork();
+ 
+     expect(task).not.toHaveBeenCalled();
++    expect(onSkip).toHaveBeenCalledTimes(1);
+   });
+ });
 -- 
 2.50.1 (Apple Git-155)
 

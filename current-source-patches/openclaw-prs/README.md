@@ -11,12 +11,15 @@ Keep upstream PR tracking and review follow-up here.
 - `#76091` `[codex] Fix Discord reply typing lifecycle`
   - branch: `zhuisDEV/codex/discord-reply-typing-lifecycle`
   - status: draft/open as of `2026-05-03`
-  - commit: `fb59ff626af60e88b08d4b82c6da350a9fbdd7d5`
+  - latest commit: `42242c8396a8a19261efb446fe948573473a7828`
   - portable patch:
     `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
+  - patch shape: two-commit `git am` mailbox
   - scope: use one accepted-turn Discord typing feedback owner from preflight
     acceptance through reply dispatch, preventing late feedback and
     `typing -> gap -> typing` loops
+  - review repair: clean skipped accepted typing feedback when a queued run
+    never starts after deactivation
 - `#69230` `fix(security): trust manifest registry in phantom plugin audit`
   - branch: `zhuisDEV/codex/security-audit-plugins-allow-manifest`
   - status: closed as implemented on `2026-04-26`
