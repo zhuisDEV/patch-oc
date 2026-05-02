@@ -2,8 +2,14 @@
 
 ## Unreleased - 2026-05-03
 
-- Merged the OpenClaw PR patch workspace into `openclaw-prs/`.
-  - Added `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
+- Split the repo by patch lifecycle:
+  - current source patches now live under `current-source-patches/`
+  - old Deno runtime scripts now live under `legacy-runtime-hotpatches/`
+  - root now contains repo-level docs and metadata only
+- Merged the OpenClaw PR patch workspace into
+  `current-source-patches/openclaw-prs/`.
+  - Added
+    `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
   - Kept the prior PR notes from `/Users/lilac/gh/openclaw-prs`.
 - Marked the existing runtime hotpatch parts `1`, `2`, and `3` as legacy
   compatibility patches rather than current recommendations.

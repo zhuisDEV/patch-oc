@@ -3,12 +3,12 @@
 ## 2026-05-03
 
 - Added portable source patch for Discord reply typing lifecycle:
-  `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
+  `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
 - Upstream draft PR: `https://github.com/openclaw/openclaw/pull/76091`
 - Branch: `zhuisDEV/codex/discord-reply-typing-lifecycle`
 - Commit: `fb59ff626af60e88b08d4b82c6da350a9fbdd7d5`
 - Apply from an OpenClaw source checkout with:
-  `git am /path/to/patch-oc/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
+  `git am /path/to/patch-oc/current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
 
 ## 2026-03-30
 
@@ -63,7 +63,7 @@
   just the local install.
   - packed and unpacked `openclaw@2026.4.8`
   - ran:
-    `./check.sh --part all --openclaw-root /tmp/openclaw-pack-*/package --verbose`
+    `cd legacy-runtime-hotpatches && ./check.sh --part all --openclaw-root /tmp/openclaw-pack-*/package --verbose`
   - result: both hot patches still match the published `dist/` bundle layout
     with no patch-repo code changes required
 - Re-verified ACP duplicate-replay status on `v2026.4.8`.

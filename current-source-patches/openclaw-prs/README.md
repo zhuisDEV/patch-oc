@@ -12,7 +12,8 @@ Keep upstream PR tracking and review follow-up here.
   - branch: `zhuisDEV/codex/discord-reply-typing-lifecycle`
   - status: draft/open as of `2026-05-03`
   - commit: `fb59ff626af60e88b08d4b82c6da350a9fbdd7d5`
-  - portable patch: `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
+  - portable patch:
+    `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
   - scope: use one accepted-turn Discord typing feedback owner from preflight
     acceptance through reply dispatch, preventing late feedback and
     `typing -> gap -> typing` loops
@@ -55,5 +56,6 @@ Keep upstream PR tracking and review follow-up here.
 ## Related checkouts
 
 - source repo: `/Users/lilac/gh/openclaw`
-- patch repo: `/Users/lilac/.openclaw/lws/patch-oc`
-- PR handoff: `/Users/lilac/gh/openclaw-prs/handoff.md`
+- patch repo: `/Users/lilac/gh/patch-oc`
+- PR handoff:
+  `/Users/lilac/gh/patch-oc/current-source-patches/openclaw-prs/handoff.md`

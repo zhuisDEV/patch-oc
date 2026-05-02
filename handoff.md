@@ -2,10 +2,17 @@
 
 ## 2026-05-03
 
+- Reorganized the repo so current and legacy patch material no longer share the
+  root.
+  - current source patches: `current-source-patches/openclaw-prs/`
+  - legacy runtime hotpatch CLI: `legacy-runtime-hotpatches/`
+  - repo root: documentation and metadata only
+- Updated root documentation, repo card, and per-folder READMEs for the new
+  paths.
 - Merged `/Users/lilac/gh/openclaw-prs` into this repo under
-  `/Users/lilac/gh/patch-oc/openclaw-prs`.
+  `/Users/lilac/gh/patch-oc/current-source-patches/openclaw-prs`.
   - current source patch:
-    `openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
+    `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
   - patch SHA-256 from creation:
     `6b52dfed1cbefbfb65a022b4d4f815cb3485fac405d49eef741db3fa13e24a6f`
 - Reviewed the legacy runtime hotpatch parts against current fetched
@@ -22,12 +29,13 @@
     normalized parent channel ids and `resolveChannelIdForBinding(...)`
     normalizes `channel:<id>` inputs.
 - Current practical guidance:
-  - Use the source patch in `openclaw-prs/` for the Discord reply typing
-    lifecycle work.
+  - Use the source patch in `current-source-patches/openclaw-prs/` for the
+    Discord reply typing lifecycle work.
   - Treat runtime parts `1`, `2`, and `3` as deprecated compatibility patches
     for old installs only.
-  - Do not use `./apply.sh --part all` on current OpenClaw unless an explicit
-    old-runtime check justifies it.
+  - Run legacy runtime commands from `legacy-runtime-hotpatches/`; do not use
+    `./apply.sh --part all` on current OpenClaw unless an explicit old-runtime
+    check justifies it.
 
 ## 2026-04-20
 
