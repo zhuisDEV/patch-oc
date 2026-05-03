@@ -13,9 +13,9 @@
   `/Users/lilac/gh/patch-oc/current-source-patches/openclaw-prs`.
   - current source patch:
     `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
-  - current patch SHA-256 after PR review repair:
-    `b1291714981d3d6c4272788aa27f23e9d4a8df55aa20fb168893cf8d9ef3e125`
-  - latest upstream PR commit: `42242c8396a8a19261efb446fe948573473a7828`
+  - current patch SHA-256 after PR review repairs:
+    `2d95762523a3703eb898fbe1bee0ebbba8a1c3be6338f87369073d759a082243`
+  - latest upstream PR commit: `3f81d745dad4d56814df58663fca3076e0b36f7b`
 - Reviewed the legacy runtime hotpatch parts against current fetched
   `/Users/lilac/gh/openclaw` `origin/main` at `c8fa0fd1c9`.
   - part `1` no longer needed for current upstream:

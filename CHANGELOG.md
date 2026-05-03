@@ -7,7 +7,8 @@
   - old Deno runtime scripts now live under `legacy-runtime-hotpatches/`
   - root now contains repo-level docs and metadata only
 - Refreshed the Discord reply typing lifecycle source patch after PR review.
-  - The portable patch now includes the skipped queued-run cleanup repair.
+  - The portable patch now includes the skipped queued-run cleanup repair and
+    the shared typing guard retry repair.
 - Merged the OpenClaw PR patch workspace into
   `current-source-patches/openclaw-prs/`.
   - Added

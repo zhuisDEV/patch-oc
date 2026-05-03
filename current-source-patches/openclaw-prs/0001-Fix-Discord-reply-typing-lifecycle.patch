@@ -1,7 +1,7 @@
 From fb59ff626af60e88b08d4b82c6da350a9fbdd7d5 Mon Sep 17 00:00:00 2001
 From: Lilac <lilac@Lilacs-iMac.local>
 Date: Sat, 2 May 2026 23:40:30 +1000
-Subject: [PATCH 1/2] Fix Discord reply typing lifecycle
+Subject: [PATCH 1/3] Fix Discord reply typing lifecycle
 
 ---
  extensions/discord/src/monitor/inbound-job.ts |  3 +
@@ -498,7 +498,7 @@ index c28e2b153d..5abdc77620 100644
 From 42242c8396a8a19261efb446fe948573473a7828 Mon Sep 17 00:00:00 2001
 From: Lilac <lilac@Lilacs-iMac.modem>
 Date: Sun, 3 May 2026 09:41:21 +1000
-Subject: [PATCH 2/2] fix(discord): clean skipped reply typing feedback
+Subject: [PATCH 2/3] fix(discord): clean skipped reply typing feedback
 
 ---
  CHANGELOG.md                                  |  1 +
@@ -781,6 +781,91 @@ index d4afb4aa71..f2830981b2 100644
 +    expect(onSkip).toHaveBeenCalledTimes(1);
    });
  });
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 3f81d745dad4d56814df58663fca3076e0b36f7b Mon Sep 17 00:00:00 2001
+From: Lilac <lilac@Lilacs-iMac.modem>
+Date: Sun, 3 May 2026 11:35:08 +1000
+Subject: [PATCH 3/3] fix(channels): retry tripped typing starts
+
+---
+ src/channels/typing.test.ts | 41 +++++++++++++++++++++++++++++++++++++
+ src/channels/typing.ts      |  4 ++--
+ 2 files changed, 43 insertions(+), 2 deletions(-)
+
+diff --git a/src/channels/typing.test.ts b/src/channels/typing.test.ts
+index 504ebc8a06..035aca8d0f 100644
+--- a/src/channels/typing.test.ts
++++ b/src/channels/typing.test.ts
+@@ -141,6 +141,47 @@ describe("createTypingCallbacks", () => {
+     });
+   });
+ 
++  it("resets a tripped typing guard on repeated reply starts without restarting an active interval", async () => {
++    await withFakeTimers(async () => {
++      const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
++      const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
++      try {
++        const { start, onStartError, callbacks } = createTypingHarness({
++          start: vi
++            .fn()
++            .mockRejectedValueOnce(new Error("accepted typing failed"))
++            .mockResolvedValue(undefined),
++          maxConsecutiveFailures: 1,
++        });
++
++        await callbacks.onReplyStart();
++        await flushMicrotasks();
++        expect(start).toHaveBeenCalledTimes(1);
++        expect(onStartError).toHaveBeenCalledTimes(1);
++        expect(setIntervalSpy).toHaveBeenCalledTimes(1);
++        expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
++
++        await callbacks.onReplyStart();
++        await flushMicrotasks();
++
++        expect(start).toHaveBeenCalledTimes(2);
++        expect(onStartError).toHaveBeenCalledTimes(1);
++        expect(setIntervalSpy).toHaveBeenCalledTimes(2);
++
++        await callbacks.onReplyStart();
++        await flushMicrotasks();
++
++        expect(start).toHaveBeenCalledTimes(3);
++        expect(setIntervalSpy).toHaveBeenCalledTimes(2);
++
++        callbacks.onCleanup?.();
++      } finally {
++        setIntervalSpy.mockRestore();
++        clearIntervalSpy.mockRestore();
++      }
++    });
++  });
++
+   it("stops keepalive after consecutive start failures", async () => {
+     await withFakeTimers(async () => {
+       const { start, onStartError, callbacks } = createTypingHarness({
+diff --git a/src/channels/typing.ts b/src/channels/typing.ts
+index 5abdc77620..a0b7a0f631 100644
+--- a/src/channels/typing.ts
++++ b/src/channels/typing.ts
+@@ -74,12 +74,12 @@ export function createTypingCallbacks(params: CreateTypingCallbacksParams): Typi
+       return;
+     }
+     stopSent = false;
++    startGuard.reset();
+     if (!started) {
+       started = true;
+-      startGuard.reset();
+       clearTtlTimer();
+-      keepaliveLoop.start();
+     }
++    keepaliveLoop.start();
+     startTtlTimer();
+     void keepaliveLoop.tick();
+     await Promise.resolve();
 -- 
 2.50.1 (Apple Git-155)
 

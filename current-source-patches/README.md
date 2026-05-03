@@ -11,6 +11,6 @@ git am /path/to/patch-oc/current-source-patches/openclaw-prs/0001-Fix-Discord-re
 ```
 
 The Discord lifecycle patch file is a `git am` mailbox that applies the current
-two-commit PR series.
+three-commit PR series.
 
 The `openclaw-prs/` subfolder also keeps upstream PR notes and handoff state.
