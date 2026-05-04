@@ -1,0 +1,7 @@
+{
+  "tasks": {
+    "check": "deno check patch_openclaw_installer_rollback.ts patch_openclaw_discord_reply_typing_lifecycle.ts lib/patch_utils.ts patches/npm_plugin_install_rollback.ts patches/discord_reply_typing_lifecycle.ts tests/npm_plugin_install_rollback_test.ts tests/discord_reply_typing_lifecycle_test.ts",
+    "test": "deno test tests",
+    "verify": "deno fmt --check && deno lint && deno task check && deno task test"
+  }
+}

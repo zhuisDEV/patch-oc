@@ -2,29 +2,27 @@
 
 ## Unreleased - 2026-05-04
 
-- Refreshed the Discord reply typing lifecycle source patch for current OpenClaw
-  `origin/main` at `9cc802241c`.
-  - The portable patch is now a four-commit mailbox that includes the PR review
-    repairs plus the test fixture compatibility commit.
+- Converted `patch-oc` to a local runtime-hotfix-only repo.
+  - Removed the active source patch / PR mailbox workflow from this repo.
+  - Removed stale legacy runtime hotpatch code for old context-engine, ACP, and
+    Discord child-binding compatibility parts.
+  - Moved the shared patch utility into `current-runtime-hotpatches/lib/` so
+    current hotpatches no longer depend on deleted legacy paths.
+  - Added README guidance that future OpenClaw PR work must stay in source/PR
+    workspaces and only local temporary coverage belongs here.
+- Added a current Discord reply typing lifecycle runtime hotpatch.
+  - New patch:
+    `current-runtime-hotpatches/patch_openclaw_discord_reply_typing_lifecycle.ts`.
+  - Target: installed OpenClaw `dist/channel-lifecycle.core-*.js` plus installed
+    `@openclaw/discord` `dist/message-handler*.js` bundles.
+  - Purpose: local runtime coverage for the Discord accepted reply typing
+    feedback lifecycle fix while the upstream PR is pending.
+- Added `current-runtime-hotpatches/` with an installer rollback hotpatch for
+  installed OpenClaw `dist/install-*.js` bundles, covering upstream PR #77237
+  until a packaged release includes the managed npm root snapshot restore.
 - Split the repo by patch lifecycle:
-  - current source patches now live under `current-source-patches/`
-  - old Deno runtime scripts now live under `legacy-runtime-hotpatches/`
+  - current runtime hotpatches now live under `current-runtime-hotpatches/`
   - root now contains repo-level docs and metadata only
-- Refreshed the Discord reply typing lifecycle source patch after PR review.
-  - The portable patch now includes the skipped queued-run cleanup repair and
-    the shared typing guard retry repair.
-- Merged the OpenClaw PR patch workspace into
-  `current-source-patches/openclaw-prs/`.
-  - Added
-    `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`.
-  - Kept the prior PR notes from `/Users/lilac/gh/openclaw-prs`.
-- Marked the existing runtime hotpatch parts `1`, `2`, and `3` as legacy
-  compatibility patches rather than current recommendations.
-- Documented the current review:
-  - part `1` is fixed upstream by context-engine capability entries
-  - part `2` is superseded for the Discord duplicate-reply case by channel
-    delivered-text visibility hooks
-  - part `3` is fixed upstream by Discord binding channel-id normalization
 
 ## v1.0.8 - 2026-04-20
 

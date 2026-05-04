@@ -92,11 +92,6 @@ async function resolveRootsFromPackageManagers(): Promise<string[]> {
   const pnpmRoot = await runTextCommand("pnpm", ["root", "-g"]);
   if (pnpmRoot) candidates.add(path.join(pnpmRoot, "openclaw"));
 
-  const yarnGlobalDir = await runTextCommand("yarn", ["global", "dir"]);
-  if (yarnGlobalDir) {
-    candidates.add(path.join(yarnGlobalDir, "node_modules", "openclaw"));
-  }
-
   return [...candidates];
 }
 
