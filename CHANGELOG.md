@@ -1,7 +1,11 @@
 # Changelog
 
-## Unreleased - 2026-05-03
+## Unreleased - 2026-05-04
 
+- Refreshed the Discord reply typing lifecycle source patch for current OpenClaw
+  `origin/main` at `9cc802241c`.
+  - The portable patch is now a four-commit mailbox that includes the PR review
+    repairs plus the test fixture compatibility commit.
 - Split the repo by patch lifecycle:
   - current source patches now live under `current-source-patches/`
   - old Deno runtime scripts now live under `legacy-runtime-hotpatches/`

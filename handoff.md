@@ -1,5 +1,22 @@
 # patch-oc handoff
 
+## 2026-05-04
+
+- Checked
+  `current-source-patches/openclaw-prs/0001-Fix-Discord-reply-typing-lifecycle.patch`
+  against current `/Users/lilac/gh/openclaw` `origin/main` at
+  `9cc802241c7fd4be55ddfe8a2c0176e898e98b7c`.
+- The old patch was stale and failed to apply to current OpenClaw after upstream
+  Discord test/runtime shape changes.
+- Refreshed the source patch from rebased PR branch
+  `zhuisDEV/codex/discord-reply-typing-lifecycle`.
+  - latest upstream PR commit: `81075df0e5b0ffb2f6f4e539c4ce195f48ec9690`
+  - current patch SHA-256:
+    `1cec8fe8a60cfc00592026e488d5b8c4606637779ff607f6daa93f499db4b1ab`
+  - patch shape: four-commit `git am` mailbox
+- Apply smoke passed with `git am` on a clean temporary OpenClaw worktree based
+  at `origin/main` `9cc802241c7fd4be55ddfe8a2c0176e898e98b7c`.
+
 ## 2026-05-03
 
 - Reorganized the repo so current and legacy patch material no longer share the

@@ -1,5 +1,27 @@
 # Handoff
 
+## 2026-05-04
+
+- Refreshed the portable source patch from the rebased OpenClaw PR branch:
+  `zhuisDEV/codex/discord-reply-typing-lifecycle`.
+- Upstream draft PR: `https://github.com/openclaw/openclaw/pull/76091`
+- OpenClaw base checked: `origin/main` at
+  `9cc802241c7fd4be55ddfe8a2c0176e898e98b7c`
+- Latest PR commit: `81075df0e5b0ffb2f6f4e539c4ce195f48ec9690`
+- Patch file now contains a four-commit `git am` mailbox:
+  - `69ad08a465b98e8e4c3d9ce16696772804da64e8`
+    `Fix Discord reply typing lifecycle`
+  - `0ad96afca933d6a7e5a7194c9b27d515ba19367c`
+    `fix(discord): clean skipped reply typing feedback`
+  - `c70b79e9fa4a89078341989a13db72ba255347db`
+    `fix(channels): retry tripped typing starts`
+  - `81075df0e5b0ffb2f6f4e539c4ce195f48ec9690`
+    `test(discord): align typing lifecycle fixtures`
+- Current patch SHA-256:
+  `1cec8fe8a60cfc00592026e488d5b8c4606637779ff607f6daa93f499db4b1ab`
+- Apply smoke passed with `git am` on a clean temporary OpenClaw worktree based
+  at `origin/main` `9cc802241c7fd4be55ddfe8a2c0176e898e98b7c`.
+
 ## 2026-05-03
 
 - Added portable source patch for Discord reply typing lifecycle:
