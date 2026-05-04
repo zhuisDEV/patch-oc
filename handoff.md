@@ -19,6 +19,12 @@
     `dist/message-handler.process-*.js` bundles.
   - Purpose: runtime version of the accepted Discord reply typing feedback
     lifecycle fix while the upstream PR is pending.
+  - Root cause follow-up: the installed Discord handler gated the early accepted
+    typing cue to DMs only via
+    `!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm`, so guild
+    channel turns did not show `Lilac is typing...` until reply dispatch was
+    almost ready. The hotpatch now starts accepted typing feedback for any
+    accepted Discord channel message with instant typing enabled.
   - Check with `current-runtime-hotpatches/check_discord_reply_typing.sh`; apply
     with `current-runtime-hotpatches/apply_discord_reply_typing.sh`.
   - This change added the patch to `patch-oc` and validated it against a temp

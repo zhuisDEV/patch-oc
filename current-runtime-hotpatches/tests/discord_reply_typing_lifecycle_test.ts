@@ -91,7 +91,11 @@ function createDiscordMessageRunQueue(params) {
 \t};
 }
 function shouldSendAcceptedDiscordTypingCue(ctx) {
-\treturn !ctx.abortSignal?.aborted;
+\tif (ctx.abortSignal?.aborted) return false;
+\tif (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;
+\tif (!ctx.messageText.trim()) return false;
+\tconst configuredTypingMode = ctx.cfg.session?.typingMode ?? ctx.cfg.agents?.defaults?.typingMode;
+\treturn configuredTypingMode === void 0 || configuredTypingMode === "instant";
 }
 function queueAcceptedDiscordTypingCue(ctx) {
 \tif (!shouldSendAcceptedDiscordTypingCue(ctx)) return;
@@ -157,6 +161,12 @@ function assertIncludes(value: string, marker: string): void {
   }
 }
 
+function assertNotIncludes(value: string, marker: string): void {
+  if (value.includes(marker)) {
+    throw new Error(`unexpected marker: ${marker}`);
+  }
+}
+
 Deno.test("core run queue hotpatch adds skipped-run cleanup hook", () => {
   const result = patchChannelRunQueueOnSkipContent(
     OLD_CHANNEL_LIFECYCLE_BUNDLE,
@@ -193,9 +203,43 @@ Deno.test("discord handler hotpatch carries accepted typing feedback into the qu
   assertIncludes(output, "createPatchOcDiscordReplyTypingFeedback");
   assertIncludes(output, "replyTypingFeedback,");
   assertIncludes(output, "ctx.replyTypingFeedback = replyTypingFeedback;");
+  assertIncludes(output, "if (!ctx.messageChannelId?.trim?.()) return false;");
+  assertNotIncludes(
+    output,
+    "if (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;",
+  );
   assertIncludes(
     output,
     "cleanupSkippedDiscordQueuedMessage({ job, replayGuard })",
+  );
+});
+
+Deno.test("discord handler hotpatch broadens older hotpatch from DMs to accepted channels", () => {
+  const first = patchDiscordMessageHandlerTypingLifecycleContent(
+    OLD_HANDLER_BUNDLE,
+  );
+  if (first.status !== "patched" || !first.nextContent) {
+    throw new Error(`expected first patch, got ${first.status}`);
+  }
+  const olderHotpatchShape = first.nextContent.replace(
+    "if (!ctx.messageChannelId?.trim?.()) return false;",
+    "if (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;",
+  );
+  const broadened = patchDiscordMessageHandlerTypingLifecycleContent(
+    olderHotpatchShape,
+  );
+  if (broadened.status !== "patched" || !broadened.nextContent) {
+    throw new Error(
+      `expected scope broadening patch, got ${broadened.status}: ${broadened.detail}`,
+    );
+  }
+  assertIncludes(
+    broadened.nextContent,
+    "if (!ctx.messageChannelId?.trim?.()) return false;",
+  );
+  assertNotIncludes(
+    broadened.nextContent,
+    "if (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;",
   );
 });
 

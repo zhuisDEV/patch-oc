@@ -39,7 +39,10 @@ The Discord reply typing lifecycle hotpatch is local runtime coverage for the
 same upstream bug tracked by the OpenClaw Discord reply typing lifecycle PR. It
 patches both installed OpenClaw core `dist/channel-lifecycle.core-*.js` and the
 installed `@openclaw/discord` `dist/message-handler*.js` bundles, and writes
-`.bak-discord-reply-typing-lifecycle` backups.
+`.bak-discord-reply-typing-lifecycle` backups. It also broadens the accepted
+typing cue from DM-only to any accepted Discord channel message, so guild
+channels can show `Lilac is typing...` while OpenClaw is processing instead of
+only just before delivery.
 
 ## Requirements
 

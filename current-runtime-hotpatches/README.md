@@ -65,14 +65,18 @@ Symptom:
 - Discord reply feedback can start late and then show a
   `typing -> gap -> typing` lifecycle instead of one continuous accepted reply
   typing owner.
+- In guild channels, `Lilac is typing...` can be missing until the final reply
+  is almost ready, because the old early accepted typing cue was scoped to DMs
+  only.
 
 The hotpatch applies the runtime version of the Discord reply typing lifecycle
 fix:
 
 - installed OpenClaw core `dist/channel-lifecycle.core-*.js` gets skipped-run
   cleanup hook support for channel run queues
-- installed `@openclaw/discord` `dist/message-handler-*.js` carries the accepted
-  reply typing feedback object into queued processing
+- installed `@openclaw/discord` `dist/message-handler-*.js` starts accepted
+  reply typing feedback for any accepted Discord channel message, not only DMs,
+  and carries that feedback object into queued processing
 - installed `@openclaw/discord` `dist/message-handler.process-*.js` reuses that
   feedback object as the reply pipeline typing callbacks and cleans it up after
   processing

@@ -87,6 +87,24 @@ const HANDLER_NEW_QUEUE_ENQUEUE =
 \t\t\t}, {
 \t\t\t\tonSkip: () => cleanupSkippedDiscordQueuedMessage({ job, replayGuard })
 \t\t\t});`;
+const HANDLER_DM_ONLY_TYPING_GATE =
+  "if (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;";
+const HANDLER_OLD_SHOULD_SEND_TYPING_CUE =
+  `function shouldSendAcceptedDiscordTypingCue(ctx) {
+\tif (ctx.abortSignal?.aborted) return false;
+\tif (!ctx.isDirectMessage || ctx.isGuildMessage || ctx.isGroupDm) return false;
+\tif (!ctx.messageText.trim()) return false;
+\tconst configuredTypingMode = ctx.cfg.session?.typingMode ?? ctx.cfg.agents?.defaults?.typingMode;
+\treturn configuredTypingMode === void 0 || configuredTypingMode === "instant";
+}`;
+const HANDLER_NEW_SHOULD_SEND_TYPING_CUE =
+  `function shouldSendAcceptedDiscordTypingCue(ctx) {
+\tif (ctx.abortSignal?.aborted) return false;
+\tif (!ctx.messageChannelId?.trim?.()) return false;
+\tif (!ctx.messageText.trim()) return false;
+\tconst configuredTypingMode = ctx.cfg.session?.typingMode ?? ctx.cfg.agents?.defaults?.typingMode;
+\treturn configuredTypingMode === void 0 || configuredTypingMode === "instant";
+}`;
 const HANDLER_CLEANUP_FUNCTION =
   `function cleanupSkippedDiscordQueuedMessage(params) {
 \ttry {
@@ -211,6 +229,10 @@ function alreadyHasSourceHandlerFix(content: string): boolean {
     content.includes("replyTypingFeedback");
 }
 
+function hasGenericAcceptedTypingCueScope(content: string): boolean {
+  return !content.includes(HANDLER_DM_ONLY_TYPING_GATE);
+}
+
 function alreadyHasSourceProcessFix(content: string): boolean {
   return content.includes("createDiscordReplyTypingFeedback") &&
     content.includes("typingCallbacks: typingFeedback") &&
@@ -267,8 +289,24 @@ export function patchChannelRunQueueOnSkipContent(
 export function patchDiscordMessageHandlerTypingLifecycleContent(
   content: string,
 ): PatchDecision {
+  const hasLifecyclePatch = content.includes(HANDLER_PATCH_MARKER);
+  if (hasLifecyclePatch && !hasGenericAcceptedTypingCueScope(content)) {
+    const broadened = replaceRequired(
+      content,
+      HANDLER_OLD_SHOULD_SEND_TYPING_CUE,
+      HANDLER_NEW_SHOULD_SEND_TYPING_CUE,
+      "accepted typing cue scope",
+    );
+    if (!broadened.ok) return broadened.decision;
+    return {
+      status: "patched",
+      detail:
+        "broadened accepted Discord typing feedback from DMs to all accepted channels",
+      nextContent: broadened.content,
+    };
+  }
   if (
-    content.includes(HANDLER_PATCH_MARKER) ||
+    hasLifecyclePatch ||
     alreadyHasSourceHandlerFix(content)
   ) {
     return {
@@ -288,6 +326,15 @@ export function patchDiscordMessageHandlerTypingLifecycleContent(
   }
 
   let next = content;
+  const shouldSendReplaced = replaceRequired(
+    next,
+    HANDLER_OLD_SHOULD_SEND_TYPING_CUE,
+    HANDLER_NEW_SHOULD_SEND_TYPING_CUE,
+    "accepted typing cue scope",
+  );
+  if (!shouldSendReplaced.ok) return shouldSendReplaced.decision;
+  next = shouldSendReplaced.content;
+
   if (!next.includes(`openclaw/plugin-sdk/channel-reply-pipeline`)) {
     const imported = replaceRequired(
       next,

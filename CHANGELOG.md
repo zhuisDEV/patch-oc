@@ -17,6 +17,9 @@
     `@openclaw/discord` `dist/message-handler*.js` bundles.
   - Purpose: local runtime coverage for the Discord accepted reply typing
     feedback lifecycle fix while the upstream PR is pending.
+  - Follow-up: broadened the early accepted typing cue from DM-only to all
+    accepted Discord channel messages, so guild channels show typing during
+    processing instead of only near final delivery.
 - Added `current-runtime-hotpatches/` with an installer rollback hotpatch for
   installed OpenClaw `dist/install-*.js` bundles, covering upstream PR #77237
   until a packaged release includes the managed npm root snapshot restore.
